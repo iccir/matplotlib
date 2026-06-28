@@ -167,8 +167,8 @@ static void lazy_init(void) {
     PyOS_InputHook = wait_for_stdin;
 }
 
-static PyObject*
-event_loop_is_running(PyObject* self)
+static PyObject *
+event_loop_is_running(PyObject *self)
 {
     BEGIN_OBJC_ENTRY
 
@@ -182,8 +182,8 @@ event_loop_is_running(PyObject* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-wake_on_fd_write(PyObject* unused, PyObject* args)
+static PyObject *
+wake_on_fd_write(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     int fd;
@@ -194,7 +194,7 @@ wake_on_fd_write(PyObject* unused, PyObject* args)
                     object: fh
                      queue: nil
                 usingBlock: ^(NSNotification* note) {
-                    NSFileHandle* strongFileHandle __attribute__((unused)) = fh;
+                    NSFileHandle *strongFileHandle __attribute__((unused)) = fh;
                     PyGILState_STATE gstate = PyGILState_Ensure();
                     PyErr_CheckSignals();
                     PyGILState_Release(gstate);
@@ -205,8 +205,8 @@ wake_on_fd_write(PyObject* unused, PyObject* args)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-stop(PyObject* self, PyObject* _ /* ignored */)
+static PyObject *
+stop(PyObject *self, PyObject *unused)
 {
     BEGIN_OBJC_ENTRY
     stopWithEvent();
@@ -215,6 +215,8 @@ stop(PyObject* self, PyObject* _ /* ignored */)
 }
 
 
+#pragma mark - FigureCanvas Type
+
 typedef struct {
     PyObject_HEAD
     __strong MPLFigureCanvas *object;
@@ -222,14 +224,13 @@ typedef struct {
 
 static PyTypeObject FigureCanvasType;
 
-static PyObject*
+static PyObject *
 FigureCanvas_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
 
     lazy_init();
-    FigureCanvas *self = (FigureCanvas*)type->tp_alloc(type, 0);
-    return (PyObject*)self;
+    return (PyObject *)((FigureCanvas *)type->tp_alloc(type, 0));
 
     END_OBJC_ENTRY
     return NULL;
@@ -254,7 +255,7 @@ FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
         goto exit;
     }
     int width, height;
-    if (!(wh = PyObject_CallMethod((PyObject*)self, "get_width_height", ""))
+    if (!(wh = PyObject_CallMethod((PyObject *)self, "get_width_height", ""))
             || !PyArg_ParseTuple(wh, "ii", &width, &height)) {
         goto exit;
     }
@@ -268,8 +269,8 @@ FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
                                                   owner: wrappedObject
                                                userInfo: nil];
     [wrappedObject addTrackingArea:trackingArea];
-    [wrappedObject setPyObject:(PyObject*)self];
     self->object = wrappedObject;
+    [self->object setPyObject:(PyObject *)self];
 
 exit:
     Py_XDECREF(super_obj);
@@ -282,24 +283,24 @@ exit:
 }
 
 static void
-FigureCanvas_dealloc(FigureCanvas* self)
+FigureCanvas_dealloc(FigureCanvas *self)
 {
     BEGIN_OBJC_ENTRY
     [self->object setPyObject:NULL];
     self->object = nil;
     END_OBJC_ENTRY
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-static PyObject*
-FigureCanvas_repr(FigureCanvas* self)
+static PyObject *
+FigureCanvas_repr(FigureCanvas *self)
 {
     return PyUnicode_FromFormat("FigureCanvas<%p> wrapping MPLFigureCanvas<%p>",
-                               (void *)self, (__bridge void *)self->object);
+                                (void *)self, (__bridge void *)self->object);
 }
 
-static PyObject*
-FigureCanvas_update(FigureCanvas* self)
+static PyObject *
+FigureCanvas_update(FigureCanvas *self)
 {
     BEGIN_OBJC_ENTRY
     [self->object setNeedsDisplay: YES];
@@ -307,8 +308,8 @@ FigureCanvas_update(FigureCanvas* self)
     RETURN_NULL_OR_NONE;
 }
 
-static PyObject*
-FigureCanvas_flush_events(FigureCanvas* self)
+static PyObject *
+FigureCanvas_flush_events(FigureCanvas *self)
 {
     BEGIN_OBJC_ENTRY
     // We run the app, matching any events that are waiting in the queue
@@ -325,8 +326,17 @@ FigureCanvas_flush_events(FigureCanvas* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureCanvas_set_cursor(PyObject* unused, PyObject* args)
+static PyObject * __attribute__((unused))
+FigureCanvas_request_idle_draw(FigureCanvas *self)
+{
+    BEGIN_OBJC_ENTRY
+    // Will be implemented
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+FigureCanvas_set_cursor(FigureCanvas *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     int i;
@@ -352,8 +362,8 @@ FigureCanvas_set_cursor(PyObject* unused, PyObject* args)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureCanvas_set_rubberband(FigureCanvas* self, PyObject *args)
+static PyObject *
+FigureCanvas_set_rubberband(FigureCanvas *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     MPLFigureCanvas *figureCanvas = self->object;
@@ -376,8 +386,8 @@ FigureCanvas_set_rubberband(FigureCanvas* self, PyObject *args)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureCanvas_remove_rubberband(FigureCanvas* self)
+static PyObject *
+FigureCanvas_remove_rubberband(FigureCanvas *self)
 {
     BEGIN_OBJC_ENTRY
     [self->object removeRubberband];
@@ -385,25 +395,25 @@ FigureCanvas_remove_rubberband(FigureCanvas* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureCanvas__start_event_loop(FigureCanvas* self, PyObject* args, PyObject* keywords)
+static PyObject *
+FigureCanvas__start_event_loop(FigureCanvas *self, PyObject *args, PyObject *keywords)
 {
     BEGIN_OBJC_ENTRY
     float timeout = 0.0;
 
-    static char* kwlist[] = {"timeout", NULL};
+    static char *kwlist[] = {"timeout", NULL};
     if (!PyArg_ParseTupleAndKeywords(args, keywords, "f", kwlist, &timeout)) {
         return NULL;
     }
 
     Py_BEGIN_ALLOW_THREADS
 
-    NSDate* date =
+    NSDate *date =
         (timeout > 0.0) ? [NSDate dateWithTimeIntervalSinceNow: timeout]
                         : [NSDate distantFuture];
     while (true) {
         @autoreleasepool {
-            NSEvent* event = [NSApp nextEventMatchingMask: NSEventMaskAny
+            NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                                 untilDate: date
                                                    inMode: NSDefaultRunLoopMode
                                                   dequeue: YES];
@@ -418,8 +428,8 @@ FigureCanvas__start_event_loop(FigureCanvas* self, PyObject* args, PyObject* key
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureCanvas_stop_event_loop(FigureCanvas* self)
+static PyObject *
+FigureCanvas_stop_event_loop(FigureCanvas *self)
 {
     BEGIN_OBJC_ENTRY
     // +[NSEvent otherEventWithType:...] is declared nullable but will not return
@@ -485,6 +495,9 @@ static PyTypeObject FigureCanvasType = {
     },
 };
 
+
+#pragma mark - FigureManager Type
+
 static PyTypeObject FigureManagerType;  // forward declaration, needed in destroy()
 
 typedef struct {
@@ -492,7 +505,7 @@ typedef struct {
     __strong Window* window;
 } FigureManager;
 
-static PyObject*
+static PyObject *
 FigureManager_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
@@ -507,11 +520,8 @@ FigureManager_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     lazy_init();
-    FigureManager *self = (FigureManager*)type->tp_alloc(type, 0);
-    if (!self) {
-        return NULL;
-    }
-    return (PyObject*)self;
+    return (PyObject *)((FigureManager *)type->tp_alloc(type, 0));
+
     END_OBJC_ENTRY
     return NULL;
 }
@@ -520,7 +530,7 @@ static int
 FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
-    PyObject* canvas;
+    PyObject *canvas;
     if (!PyArg_ParseTuple(args, "O", &canvas)) {
         return -1;
     }
@@ -531,7 +541,7 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    PyObject* size = PyObject_CallMethod(canvas, "get_width_height", "");
+    PyObject *size = PyObject_CallMethod(canvas, "get_width_height", "");
     int width, height;
     if (!size || !PyArg_ParseTuple(size, "ii", &width, &height)) {
         Py_XDECREF(size);
@@ -562,8 +572,17 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
-static PyObject*
-FigureManager__set_window_mode(FigureManager* self, PyObject* args)
+static PyObject * __attribute__((unused))
+FigureManager__set_window_appearance(FigureManager *self, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+    // Will be implemented
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+FigureManager__set_window_mode(FigureManager *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     const char* window_mode;
@@ -583,15 +602,15 @@ FigureManager__set_window_mode(FigureManager* self, PyObject* args)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager_repr(FigureManager* self)
+static PyObject *
+FigureManager_repr(FigureManager *self)
 {
     return PyUnicode_FromFormat("FigureManager<%p> wrapping Window<%p>",
                                (void *)self, (__bridge void *)(self->window));
 }
 
 static void
-FigureManager__closeAndClearWindow(FigureManager* self)
+FigureManager__closeAndClearWindow(FigureManager *self)
 {
     if (self->window) {
         [self->window close];
@@ -606,16 +625,16 @@ FigureManager__closeAndClearWindow(FigureManager* self)
 }
 
 static void
-FigureManager_dealloc(FigureManager* self)
+FigureManager_dealloc(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
     FigureManager__closeAndClearWindow(self);
     END_OBJC_ENTRY
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-static PyObject*
-FigureManager__show(FigureManager* self)
+static PyObject *
+FigureManager__show(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
     [self->window makeKeyAndOrderFront: nil];
@@ -623,8 +642,8 @@ FigureManager__show(FigureManager* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager__raise(FigureManager* self)
+static PyObject *
+FigureManager__raise(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
     [self->window orderFrontRegardless];
@@ -632,8 +651,8 @@ FigureManager__raise(FigureManager* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager_destroy(FigureManager* self)
+static PyObject *
+FigureManager_destroy(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
     FigureManager__closeAndClearWindow(self);
@@ -660,8 +679,8 @@ FigureManager_destroy(FigureManager* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager_set_icon(PyObject* null, PyObject* args) {
+static PyObject *
+FigureManager_set_icon(PyObject *null, PyObject *args) {
     BEGIN_OBJC_ENTRY
     PyObject* icon_path;
     if (!PyArg_ParseTuple(args, "O&", &PyUnicode_FSDecoder, &icon_path)) {
@@ -696,7 +715,7 @@ FigureManager_set_icon(PyObject* null, PyObject* args) {
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
+static PyObject *
 FigureManager_set_window_title(FigureManager* self,
                                PyObject *args, PyObject *kwds)
 {
@@ -713,11 +732,11 @@ FigureManager_set_window_title(FigureManager* self,
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager_get_window_title(FigureManager* self)
+static PyObject *
+FigureManager_get_window_title(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    NSString* title = [self->window title];
+    NSString *title = [self->window title];
     if (title) {
         return PyUnicode_FromString([title UTF8String]);
     }
@@ -725,8 +744,8 @@ FigureManager_get_window_title(FigureManager* self)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager_resize(FigureManager* self, PyObject *args, PyObject *kwds)
+static PyObject *
+FigureManager_resize(FigureManager *self, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
     int width, height;
@@ -745,8 +764,8 @@ FigureManager_resize(FigureManager* self, PyObject *args, PyObject *kwds)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-FigureManager_full_screen_toggle(FigureManager* self)
+static PyObject *
+FigureManager_full_screen_toggle(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
     [self->window toggleFullScreen: nil];
@@ -800,20 +819,23 @@ static PyTypeObject FigureManagerType = {
     },
 };
 
+
+#pragma mark - NavigationToolbar2 Type
+
 typedef struct {
     PyObject_HEAD
-    __strong NSTextView* messagebox;
+    __strong NSTextView *messagebox;
     __strong MPLNavigationToolbar2 *object;
     int height;
 } NavigationToolbar2;
 
-static PyObject*
+static PyObject *
 NavigationToolbar2_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
     lazy_init();
-    NavigationToolbar2 *self = (NavigationToolbar2*)type->tp_alloc(type, 0);
-    return (PyObject*)self;
+    NavigationToolbar2 *self = (NavigationToolbar2 *)type->tp_alloc(type, 0);
+    return (PyObject *)self;
     END_OBJC_ENTRY
     return NULL;
 }
@@ -822,7 +844,7 @@ static int
 NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
-    FigureCanvas* canvas;
+    FigureCanvas *canvas;
     const char* images[7];
     const char* tooltips[7];
 
@@ -947,18 +969,18 @@ NavigationToolbar2_dealloc(NavigationToolbar2 *self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-static PyObject*
+static PyObject *
 NavigationToolbar2_repr(NavigationToolbar2* self)
 {
     return PyUnicode_FromFormat("NavigationToolbar2<%p> wrapping MPLNavigationToolbar2<%p>",
-                               (void *)self, (__bridge void *)self->object);
+                                (void *)self, (__bridge void *)self->object);
 }
 
-static PyObject*
-NavigationToolbar2_set_message(NavigationToolbar2 *self, PyObject* args)
+static PyObject *
+NavigationToolbar2_set_message(NavigationToolbar2 *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    const char* message;
+    const char *message;
 
     if (!PyArg_ParseTuple(args, "s", &message)) { return NULL; }
 
@@ -1013,8 +1035,8 @@ static PyTypeObject NavigationToolbar2Type = {
     },
 };
 
-static PyObject*
-choose_save_file(PyObject* unused, PyObject* args)
+static PyObject *
+choose_save_file(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
 
@@ -1046,8 +1068,8 @@ choose_save_file(PyObject* unused, PyObject* args)
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-show(PyObject* self)
+static PyObject *
+show(PyObject *self)
 {
     BEGIN_OBJC_ENTRY
 
@@ -1073,32 +1095,35 @@ show(PyObject* self)
     RETURN_NULL_OR_NONE
 }
 
+
+#pragma mark - Timer Type
+
 typedef struct {
     PyObject_HEAD
-    __strong NSTimer* timer;
+    __strong NSTimer *timer;
     BOOL shouldInvalidate;
 } Timer;
 
-static PyObject*
-Timer_new(PyTypeObject* type, PyObject *args, PyObject *kwds)
+static PyObject *
+Timer_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
     lazy_init();
-    Timer* self = (Timer*)type->tp_alloc(type, 0);
-    return (PyObject*) self;
+    Timer *self = (Timer *)type->tp_alloc(type, 0);
+    return (PyObject *)self;
     END_OBJC_ENTRY
     return NULL;
 }
 
-static PyObject*
-Timer_repr(Timer* self)
+static PyObject *
+Timer_repr(Timer *self)
 {
     return PyUnicode_FromFormat("Timer<%p> wrapping NSTimer<%p>",
-                               (void *)self, (__bridge void *)self->timer);
+                                (void *)self, (__bridge void *)self->timer);
 }
 
 static void
-Timer__timer_stop_impl(Timer* self)
+Timer__timer_stop_impl(Timer *self)
 {
     if (self->shouldInvalidate) {
         [self->timer invalidate];
@@ -1107,19 +1132,19 @@ Timer__timer_stop_impl(Timer* self)
     self->timer = nil;
 }
 
-static PyObject*
-Timer__timer_start(Timer* self, PyObject* args)
+static PyObject *
+Timer__timer_start(Timer *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     NSTimer *timer;
     NSTimeInterval interval;
-    PyObject* py_interval = NULL, * py_single = NULL, * py_on_timer = NULL;
+    PyObject *py_interval = NULL, *py_single = NULL, *py_on_timer = NULL;
     int single;
-    if (!(py_interval = PyObject_GetAttrString((PyObject*)self, "_interval"))
-        || ((interval = PyFloat_AsDouble(py_interval) / 1000.), PyErr_Occurred())
-        || !(py_single = PyObject_GetAttrString((PyObject*)self, "_single"))
+    if (!(py_interval = PyObject_GetAttrString((PyObject *)self, "_interval"))
+        || ((void)((interval = PyFloat_AsDouble(py_interval) / 1000.)), PyErr_Occurred())
+        || !(py_single = PyObject_GetAttrString((PyObject *)self, "_single"))
         || ((single = PyObject_IsTrue(py_single)) == -1)
-        || !(py_on_timer = PyObject_GetAttrString((PyObject*)self, "_on_timer"))) {
+        || !(py_on_timer = PyObject_GetAttrString((PyObject *)self, "_on_timer"))) {
         goto exit;
     }
     if (!PyMethod_Check(py_on_timer)) {
@@ -1134,7 +1159,7 @@ Timer__timer_start(Timer* self, PyObject* args)
     timer = [NSTimer timerWithTimeInterval: interval
                                    repeats: !single
                                      block: ^(NSTimer *timer) {
-        gil_call_method((PyObject*)self, "_on_timer");
+        gil_call_method((PyObject *)self, "_on_timer");
         if (single) {
             // A single-shot timer will be automatically invalidated when it fires, so
             // we shouldn't do it ourselves when the object is deleted.
@@ -1157,8 +1182,8 @@ exit:
     RETURN_NULL_OR_NONE
 }
 
-static PyObject*
-Timer__timer_stop(Timer* self)
+static PyObject *
+Timer__timer_stop(Timer *self)
 {
     BEGIN_OBJC_ENTRY
     Timer__timer_stop_impl(self);
@@ -1167,12 +1192,12 @@ Timer__timer_stop(Timer* self)
 }
 
 static void
-Timer_dealloc(Timer* self)
+Timer_dealloc(Timer *self)
 {
     BEGIN_OBJC_ENTRY
     Timer__timer_stop_impl(self);
     END_OBJC_ENTRY
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 static PyTypeObject TimerType = {
