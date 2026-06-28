@@ -4,7 +4,7 @@
 /* Keep track of the current mouse up/down state for open/closed cursor hand */
 extern bool mpl_leftMouseGrabbing;
 
-@interface View : NSView <NSWindowDelegate>
+@interface MPLFigureCanvas : NSView <NSWindowDelegate>
 {   NSRect rubberband;
     @public double device_scale;
 }
@@ -33,5 +33,5 @@ extern bool mpl_leftMouseGrabbing;
 - (void)scrollWheel:(NSEvent *)event;
 - (BOOL)acceptsFirstResponder;
 - (void)flagsChanged:(NSEvent*)event;
-@property (nonatomic, assign) PyObject* canvas;
+@property (nonatomic, assign) PyObject *pyObject;
 @end

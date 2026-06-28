@@ -1,7 +1,7 @@
 #import "MPLAppDelegate.h"
 
 
-@implementation MatplotlibAppDelegate
+@implementation MPLAppDelegate
 - (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)app {
     return YES;
 }

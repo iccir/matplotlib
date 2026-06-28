@@ -1,5 +1,4 @@
 #import <AppKit/AppKit.h>
 
-@interface MatplotlibAppDelegate : NSObject <NSApplicationDelegate>
-- (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)app;
+@interface MPLAppDelegate : NSObject <NSApplicationDelegate>
 @end

@@ -2,6 +2,15 @@
 #import "MPLUtils.h"
 #import "MPLFigureManager.h"
 
+
+static void _buffer_release(void* info, const void* data, size_t size) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyBuffer_Release((Py_buffer *)info);
+    free(info);
+    PyGILState_Release(gstate);
+}
+
+
 /* Keep track of modifier key states for flagsChanged
    to keep track of press vs release */
 static bool lastCommand = false;
@@ -83,8 +92,15 @@ PyObject* mpl_modifiers(NSEvent* event)
     return list;
 }
 
-@implementation View
-- (instancetype)initWithFrame:(NSRect)rect
+
+@implementation MPLFigureCanvas {
+    // Private ivars will live here
+}
+
+
+#pragma mark - Lifecycle
+
+- (instancetype) initWithFrame:(NSRect)rect
 {
     if (self = [super initWithFrame: rect]) {
         rubberband = NSZeroRect;
@@ -93,80 +109,38 @@ PyObject* mpl_modifiers(NSEvent* event)
     return self;
 }
 
-static void _buffer_release(void* info, const void* data, size_t size) {
+
+#pragma mark - Superclass Overrides
+
+// This will become a -viewDidChangeBackingProperties override
+- (void) updateDevicePixelRatio:(double)scale
+{
+    PyObject *change = NULL;
     PyGILState_STATE gstate = PyGILState_Ensure();
-    PyBuffer_Release((Py_buffer *)info);
-    free(info);
+
+    device_scale = scale;
+
+    if (!(change = PyObject_CallMethod(_pyObject, "_set_device_pixel_ratio", "d", device_scale))) {
+        PyErr_Print();
+        goto exit;
+    }
+
+    if (PyObject_IsTrue(change)) {
+        // Notify that there was a resize_event that took place
+        process_event(
+            "ResizeEvent", "{s:s, s:O}",
+            "name", "resize_event", "canvas", _pyObject);
+        gil_call_method(_pyObject, "draw_idle");
+        [self setNeedsDisplay: YES];
+    }
+
+exit:
+    Py_XDECREF(change);
+
     PyGILState_Release(gstate);
 }
 
-static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
-{
-    Py_buffer *buffer = malloc(sizeof(Py_buffer));
-
-    if (PyObject_GetBuffer(renderer, buffer, PyBUF_CONTIG_RO) == -1) {
-        PyErr_Print();
-        return 1;
-    }
-
-    if (buffer->ndim != 3 || buffer->shape[2] != 4) {
-        _buffer_release(buffer, NULL, 0);
-        return 1;
-    }
-
-    const Py_ssize_t nrows = buffer->shape[0];
-    const Py_ssize_t ncols = buffer->shape[1];
-    const size_t bytesPerComponent = 1;
-    const size_t bitsPerComponent = 8 * bytesPerComponent;
-    const size_t nComponents = 4; /* red, green, blue, alpha */
-    const size_t bitsPerPixel = bitsPerComponent * nComponents;
-    const size_t bytesPerRow = nComponents * bytesPerComponent * ncols;
-
-    CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    if (!colorspace) {
-        _buffer_release(buffer, NULL, 0);
-        return 1;
-    }
-
-    CGDataProviderRef provider = CGDataProviderCreateWithData(buffer,
-                                                              buffer->buf,
-                                                              buffer->len,
-                                                              _buffer_release);
-    if (!provider) {
-        _buffer_release(buffer, NULL, 0);
-        CGColorSpaceRelease(colorspace);
-        return 1;
-    }
-
-    CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaLast;
-    CGImageRef bitmap = CGImageCreate(ncols,
-                                      nrows,
-                                      bitsPerComponent,
-                                      bitsPerPixel,
-                                      bytesPerRow,
-                                      colorspace,
-                                      bitmapInfo,
-                                      provider,
-                                      NULL,
-                                      false,
-                                      kCGRenderingIntentDefault);
-    CGColorSpaceRelease(colorspace);
-    CGDataProviderRelease(provider);
-
-    if (!bitmap) {
-        return 1;
-    }
-
-    CGFloat deviceScale = _get_device_scale(cr);
-    CGContextSaveGState(cr);
-    CGContextDrawImage(cr, CGRectMake(0, 0, ncols/deviceScale, nrows/deviceScale), bitmap);
-    CGImageRelease(bitmap);
-    CGContextRestoreGState(cr);
-
-    return 0;
-}
-
--(void)drawRect:(NSRect)rect
+-(void) drawRect:(NSRect)rect
 {
     PyObject* renderer = NULL;
     PyObject* renderer_buffer = NULL;
@@ -175,7 +149,7 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
 
     CGContextRef cr = [[NSGraphicsContext currentContext] CGContext];
 
-    if (!(renderer = PyObject_CallMethod(_canvas, "get_renderer", ""))
+    if (!(renderer = PyObject_CallMethod(_pyObject, "get_renderer", ""))
         || !(renderer_buffer = PyObject_CallMethod(renderer, "buffer_rgba", ""))) {
         PyErr_Print();
         goto exit;
@@ -206,39 +180,8 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     PyGILState_Release(gstate);
 }
 
-- (void)updateDevicePixelRatio:(double)scale
-{
-    PyObject* change = NULL;
-    PyGILState_STATE gstate = PyGILState_Ensure();
-
-    device_scale = scale;
-    if (!(change = PyObject_CallMethod(_canvas, "_set_device_pixel_ratio", "d", device_scale))) {
-        PyErr_Print();
-        goto exit;
-    }
-    if (PyObject_IsTrue(change)) {
-        // Notify that there was a resize_event that took place
-        process_event(
-            "ResizeEvent", "{s:s, s:O}",
-            "name", "resize_event", "canvas", _canvas);
-        gil_call_method(_canvas, "draw_idle");
-        [self setNeedsDisplay: YES];
-    }
-
-  exit:
-    Py_XDECREF(change);
-
-    PyGILState_Release(gstate);
-}
-
-- (void)windowDidChangeBackingProperties:(NSNotification *)notification
-{
-    Window* window = [notification object];
-
-    [self updateDevicePixelRatio: [window backingScaleFactor]];
-}
-
-- (void)windowDidResize: (NSNotification*)notification
+// This becomes a -setFrameSize: override
+- (void) windowDidResize:(NSNotification*)notification
 {
     int width, height;
     Window* window = [notification object];
@@ -251,7 +194,7 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
 
     PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject* result = PyObject_CallMethod(
-            _canvas, "resize", "ii", width, height);
+            _pyObject, "resize", "ii", width, height);
     if (result)
         Py_DECREF(result);
     else
@@ -260,7 +203,24 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     [self setNeedsDisplay: YES];
 }
 
-- (void)windowWillClose:(NSNotification*)notification
+- (BOOL) acceptsFirstResponder
+{
+    return YES;
+}
+
+
+#pragma mark - NSWindowDelegate
+
+// This goes away and we will use a -viewDidChangeBackingProperties override
+- (void) windowDidChangeBackingProperties:(NSNotification *)notification
+{
+    Window *window = [notification object];
+
+    [self updateDevicePixelRatio: [window backingScaleFactor]];
+}
+
+// This gets moved to MPLFigureManager, which will be a NSWindowController subclass
+- (void) windowWillClose:(NSNotification *)notification
 {
     // A view should not be the delegate of a window, this check
     // will go away with next refactor
@@ -270,7 +230,8 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     }
 }
 
-- (BOOL)windowShouldClose:(NSNotification*)notification
+// This gets moved to MPLFigureManager, which will be a NSWindowController subclass
+- (BOOL) windowShouldClose:(NSNotification *)notification
 {
     // A view should not be the delegate of a window, this check
     // will go away with next refactor
@@ -281,148 +242,10 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     return YES;
 }
 
-- (void)mouseEntered:(NSEvent *)event
-{
-    int x, y;
-    NSPoint location = [event locationInWindow];
-    location = [self convertPoint: location fromView: nil];
-    x = location.x * device_scale;
-    y = location.y * device_scale;
-    process_event(
-        "LocationEvent", "{s:s, s:O, s:i, s:i, s:N}",
-        "name", "figure_enter_event", "canvas", _canvas, "x", x, "y", y,
-        "modifiers", mpl_modifiers(event));
-}
 
-- (void)mouseExited:(NSEvent *)event
-{
-    int x, y;
-    NSPoint location = [event locationInWindow];
-    location = [self convertPoint: location fromView: nil];
-    x = location.x * device_scale;
-    y = location.y * device_scale;
-    process_event(
-        "LocationEvent", "{s:s, s:O, s:i, s:i, s:N}",
-        "name", "figure_leave_event", "canvas", _canvas, "x", x, "y", y,
-        "modifiers", mpl_modifiers(event));
-}
+#pragma mark - Keyboard Events
 
-- (void)mouseDown:(NSEvent *)event
-{
-    int x, y;
-    int button;
-    int dblclick = 0;
-    NSPoint location = [event locationInWindow];
-    location = [self convertPoint: location fromView: nil];
-    x = location.x * device_scale;
-    y = location.y * device_scale;
-    switch ([event type])
-    {    case NSEventTypeLeftMouseDown:
-         {   unsigned int modifier = [event modifierFlags];
-             if (modifier & NSEventModifierFlagControl)
-                 /* emulate a right-button click */
-                 button = 3;
-             else if (modifier & NSEventModifierFlagOption)
-                 /* emulate a middle-button click */
-                 button = 2;
-             else
-             {
-                 button = 1;
-                 if ([NSCursor currentCursor]==[NSCursor openHandCursor]) {
-                     mpl_leftMouseGrabbing = true;
-                     [[NSCursor closedHandCursor] set];
-                 }
-             }
-             break;
-         }
-         case NSEventTypeOtherMouseDown: button = 2; break;
-         case NSEventTypeRightMouseDown: button = 3; break;
-         default: return; /* Unknown mouse event */
-    }
-    if ([event clickCount] == 2) {
-      dblclick = 1;
-    }
-    process_event(
-        "MouseEvent", "{s:s, s:O, s:i, s:i, s:i, s:i, s:N}",
-        "name", "button_press_event", "canvas", _canvas, "x", x, "y", y,
-        "button", button, "dblclick", dblclick, "modifiers", mpl_modifiers(event));
-}
-
-- (void)mouseUp:(NSEvent *)event
-{
-    int button;
-    int x, y;
-    NSPoint location = [event locationInWindow];
-    location = [self convertPoint: location fromView: nil];
-    x = location.x * device_scale;
-    y = location.y * device_scale;
-    switch ([event type])
-    {    case NSEventTypeLeftMouseUp:
-             mpl_leftMouseGrabbing = false;
-             button = 1;
-             if ([NSCursor currentCursor]==[NSCursor closedHandCursor])
-                 [[NSCursor openHandCursor] set];
-             break;
-         case NSEventTypeOtherMouseUp: button = 2; break;
-         case NSEventTypeRightMouseUp: button = 3; break;
-         default: return; /* Unknown mouse event */
-    }
-    process_event(
-        "MouseEvent", "{s:s, s:O, s:i, s:i, s:i, s:N}",
-        "name", "button_release_event", "canvas", _canvas, "x", x, "y", y,
-        "button", button, "modifiers", mpl_modifiers(event));
-}
-
-- (void)mouseMoved:(NSEvent *)event
-{
-    int x, y;
-    NSPoint location = [event locationInWindow];
-    location = [self convertPoint: location fromView: nil];
-    x = location.x * device_scale;
-    y = location.y * device_scale;
-    process_event(
-        "MouseEvent", "{s:s, s:O, s:i, s:i, s:N, s:N}",
-        "name", "motion_notify_event", "canvas", _canvas, "x", x, "y", y,
-        "buttons", mpl_buttons(), "modifiers", mpl_modifiers(event));
-}
-
-- (void)mouseDragged:(NSEvent *)event
-{
-    int x, y;
-    NSPoint location = [event locationInWindow];
-    location = [self convertPoint: location fromView: nil];
-    x = location.x * device_scale;
-    y = location.y * device_scale;
-    process_event(
-        "MouseEvent", "{s:s, s:O, s:i, s:i, s:N, s:N}",
-        "name", "motion_notify_event", "canvas", _canvas, "x", x, "y", y,
-        "buttons", mpl_buttons(), "modifiers", mpl_modifiers(event));
-}
-
-- (void)rightMouseDown:(NSEvent *)event { [self mouseDown: event]; }
-- (void)rightMouseUp:(NSEvent *)event { [self mouseUp: event]; }
-- (void)rightMouseDragged:(NSEvent *)event { [self mouseDragged: event]; }
-- (void)otherMouseDown:(NSEvent *)event { [self mouseDown: event]; }
-- (void)otherMouseUp:(NSEvent *)event { [self mouseUp: event]; }
-- (void)otherMouseDragged:(NSEvent *)event { [self mouseDragged: event]; }
-
-- (void)setRubberband:(NSRect)rect
-{
-    // The space we want to redraw is a union of the previous rubberband
-    // with the new rubberband and then expanded (negative inset) by one
-    // in each direction to account for the stroke linewidth.
-    [self setNeedsDisplayInRect: NSInsetRect(NSUnionRect(rect, rubberband), -1, -1)];
-    rubberband = rect;
-}
-
-- (void)removeRubberband
-{
-    if (NSIsEmptyRect(rubberband)) { return; }
-    [self setNeedsDisplayInRect: rubberband];
-    rubberband = NSZeroRect;
-}
-
-- (NSString*)convertKeyEvent:(NSEvent*)event
+- (NSString *) convertKeyEvent:(NSEvent *)event
 {
     NSMutableString* returnkey = [NSMutableString string];
     if (keyChangeControl) {
@@ -512,7 +335,7 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     return returnkey;
 }
 
-- (void)keyDown:(NSEvent*)event
+- (void) keyDown:(NSEvent *)event
 {
     const char* s = [[self convertKeyEvent: event] UTF8String];
     NSPoint location = [[self window] mouseLocationOutsideOfEventStream];
@@ -522,15 +345,15 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     if (s) {
         process_event(
             "KeyEvent", "{s:s, s:O, s:s, s:i, s:i}",
-            "name", "key_press_event", "canvas", _canvas, "key", s, "x", x, "y", y);
+            "name", "key_press_event", "canvas", _pyObject, "key", s, "x", x, "y", y);
     } else {
         process_event(
             "KeyEvent", "{s:s, s:O, s:O, s:i, s:i}",
-            "name", "key_press_event", "canvas", _canvas, "key", Py_None, "x", x, "y", y);
+            "name", "key_press_event", "canvas", _pyObject, "key", Py_None, "x", x, "y", y);
     }
 }
 
-- (void)keyUp:(NSEvent*)event
+- (void) keyUp:(NSEvent *)event
 {
     const char* s = [[self convertKeyEvent: event] UTF8String];
     NSPoint location = [[self window] mouseLocationOutsideOfEventStream];
@@ -540,39 +363,17 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     if (s) {
         process_event(
             "KeyEvent", "{s:s, s:O, s:s, s:i, s:i}",
-            "name", "key_release_event", "canvas", _canvas, "key", s, "x", x, "y", y);
+            "name", "key_release_event", "canvas", _pyObject, "key", s, "x", x, "y", y);
     } else {
         process_event(
             "KeyEvent", "{s:s, s:O, s:O, s:i, s:i}",
-            "name", "key_release_event", "canvas", _canvas, "key", Py_None, "x", x, "y", y);
+            "name", "key_release_event", "canvas", _pyObject, "key", Py_None, "x", x, "y", y);
     }
-}
-
-- (void)scrollWheel:(NSEvent*)event
-{
-    int step;
-    float d = [event deltaY];
-    if (d > 0) { step = 1; }
-    else if (d < 0) { step = -1; }
-    else return;
-    NSPoint location = [event locationInWindow];
-    NSPoint point = [self convertPoint: location fromView: nil];
-    int x = (int)round(point.x * device_scale);
-    int y = (int)round(point.y * device_scale - 1);
-    process_event(
-        "MouseEvent", "{s:s, s:O, s:i, s:i, s:i, s:N}",
-        "name", "scroll_event", "canvas", _canvas,
-        "x", x, "y", y, "step", step, "modifiers", mpl_modifiers(event));
-}
-
-- (BOOL)acceptsFirstResponder
-{
-    return YES;
 }
 
 // flagsChanged gets called whenever a  modifier key is pressed OR released
 // so we need to handle both cases here
-- (void)flagsChanged:(NSEvent *)event
+- (void) flagsChanged:(NSEvent *)event
 {
     bool isPress = false; // true if key is pressed, false if key was released
 
@@ -624,4 +425,230 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     keyChangeOption = false;
     keyChangeCapsLock = false;
 }
+
+
+#pragma mark - Mouse Events
+
+- (void) mouseEntered:(NSEvent *)event
+{
+    int x, y;
+    NSPoint location = [event locationInWindow];
+    location = [self convertPoint: location fromView: nil];
+    x = location.x * device_scale;
+    y = location.y * device_scale;
+    process_event(
+        "LocationEvent", "{s:s, s:O, s:i, s:i, s:N}",
+        "name", "figure_enter_event", "canvas", _pyObject, "x", x, "y", y,
+        "modifiers", mpl_modifiers(event));
+}
+
+- (void) mouseExited:(NSEvent *)event
+{
+    int x, y;
+    NSPoint location = [event locationInWindow];
+    location = [self convertPoint: location fromView: nil];
+    x = location.x * device_scale;
+    y = location.y * device_scale;
+    process_event(
+        "LocationEvent", "{s:s, s:O, s:i, s:i, s:N}",
+        "name", "figure_leave_event", "canvas", _pyObject, "x", x, "y", y,
+        "modifiers", mpl_modifiers(event));
+}
+
+
+- (void) mouseMoved:(NSEvent *)event
+{
+    int x, y;
+    NSPoint location = [event locationInWindow];
+    location = [self convertPoint: location fromView: nil];
+    x = location.x * device_scale;
+    y = location.y * device_scale;
+    process_event(
+        "MouseEvent", "{s:s, s:O, s:i, s:i, s:N, s:N}",
+        "name", "motion_notify_event", "canvas", _pyObject, "x", x, "y", y,
+        "buttons", mpl_buttons(), "modifiers", mpl_modifiers(event));
+}
+
+- (void) scrollWheel:(NSEvent *)event
+{
+    int step;
+    float d = [event deltaY];
+    if (d > 0) { step = 1; }
+    else if (d < 0) { step = -1; }
+    else return;
+    NSPoint location = [event locationInWindow];
+    NSPoint point = [self convertPoint: location fromView: nil];
+    int x = (int)round(point.x * device_scale);
+    int y = (int)round(point.y * device_scale - 1);
+    process_event(
+        "MouseEvent", "{s:s, s:O, s:i, s:i, s:i, s:N}",
+        "name", "scroll_event", "canvas", _pyObject,
+        "x", x, "y", y, "step", step, "modifiers", mpl_modifiers(event));
+}
+
+- (void) mouseDown:(NSEvent *)event
+{
+    int x, y;
+    int button;
+    int dblclick = 0;
+    NSPoint location = [event locationInWindow];
+    location = [self convertPoint: location fromView: nil];
+    x = location.x * device_scale;
+    y = location.y * device_scale;
+    switch ([event type])
+    {    case NSEventTypeLeftMouseDown:
+         {   unsigned int modifier = [event modifierFlags];
+             if (modifier & NSEventModifierFlagControl)
+                 /* emulate a right-button click */
+                 button = 3;
+             else if (modifier & NSEventModifierFlagOption)
+                 /* emulate a middle-button click */
+                 button = 2;
+             else
+             {
+                 button = 1;
+                 if ([NSCursor currentCursor]==[NSCursor openHandCursor]) {
+                     mpl_leftMouseGrabbing = true;
+                     [[NSCursor closedHandCursor] set];
+                 }
+             }
+             break;
+         }
+         case NSEventTypeOtherMouseDown: button = 2; break;
+         case NSEventTypeRightMouseDown: button = 3; break;
+         default: return; /* Unknown mouse event */
+    }
+    if ([event clickCount] == 2) {
+      dblclick = 1;
+    }
+    process_event(
+        "MouseEvent", "{s:s, s:O, s:i, s:i, s:i, s:i, s:N}",
+        "name", "button_press_event", "canvas", _pyObject, "x", x, "y", y,
+        "button", button, "dblclick", dblclick, "modifiers", mpl_modifiers(event));
+}
+
+- (void) mouseUp:(NSEvent *)event
+{
+    int button;
+    int x, y;
+    NSPoint location = [event locationInWindow];
+    location = [self convertPoint: location fromView: nil];
+    x = location.x * device_scale;
+    y = location.y * device_scale;
+    switch ([event type])
+    {    case NSEventTypeLeftMouseUp:
+             mpl_leftMouseGrabbing = false;
+             button = 1;
+             if ([NSCursor currentCursor]==[NSCursor closedHandCursor])
+                 [[NSCursor openHandCursor] set];
+             break;
+         case NSEventTypeOtherMouseUp: button = 2; break;
+         case NSEventTypeRightMouseUp: button = 3; break;
+         default: return; /* Unknown mouse event */
+    }
+    process_event(
+        "MouseEvent", "{s:s, s:O, s:i, s:i, s:i, s:N}",
+        "name", "button_release_event", "canvas", _pyObject, "x", x, "y", y,
+        "button", button, "modifiers", mpl_modifiers(event));
+}
+
+// Funnel other down/up events to -mouseDown: or -mouseUp:
+- (void) rightMouseDown:(NSEvent *)event { [self mouseDown:event]; }
+- (void) otherMouseDown:(NSEvent *)event { [self mouseDown:event]; }
+- (void) rightMouseUp:  (NSEvent *)event { [self mouseUp:event]; }
+- (void) otherMouseUp:  (NSEvent *)event { [self mouseUp:event]; }
+
+// Funnel dragged events to -mouseMoved:
+- (void) mouseDragged:     (NSEvent *)event { [self mouseMoved:event]; }
+- (void) rightMouseDragged:(NSEvent *)event { [self mouseMoved:event]; }
+- (void) otherMouseDragged:(NSEvent *)event { [self mouseMoved:event]; }
+
+
+#pragma mark - Public Methods
+
+// This will become -updateLayerWithBuffer:
+static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
+{
+    Py_buffer *buffer = malloc(sizeof(Py_buffer));
+
+    if (PyObject_GetBuffer(renderer, buffer, PyBUF_CONTIG_RO) == -1) {
+        PyErr_Print();
+        return 1;
+    }
+
+    if (buffer->ndim != 3 || buffer->shape[2] != 4) {
+        _buffer_release(buffer, NULL, 0);
+        return 1;
+    }
+
+    const Py_ssize_t nrows = buffer->shape[0];
+    const Py_ssize_t ncols = buffer->shape[1];
+    const size_t bytesPerComponent = 1;
+    const size_t bitsPerComponent = 8 * bytesPerComponent;
+    const size_t nComponents = 4; /* red, green, blue, alpha */
+    const size_t bitsPerPixel = bitsPerComponent * nComponents;
+    const size_t bytesPerRow = nComponents * bytesPerComponent * ncols;
+
+    CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    if (!colorspace) {
+        _buffer_release(buffer, NULL, 0);
+        return 1;
+    }
+
+    CGDataProviderRef provider = CGDataProviderCreateWithData(buffer,
+                                                              buffer->buf,
+                                                              buffer->len,
+                                                              _buffer_release);
+    if (!provider) {
+        _buffer_release(buffer, NULL, 0);
+        CGColorSpaceRelease(colorspace);
+        return 1;
+    }
+
+    CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaLast;
+    CGImageRef bitmap = CGImageCreate(ncols,
+                                      nrows,
+                                      bitsPerComponent,
+                                      bitsPerPixel,
+                                      bytesPerRow,
+                                      colorspace,
+                                      bitmapInfo,
+                                      provider,
+                                      NULL,
+                                      false,
+                                      kCGRenderingIntentDefault);
+    CGColorSpaceRelease(colorspace);
+    CGDataProviderRelease(provider);
+
+    if (!bitmap) {
+        return 1;
+    }
+
+    CGFloat deviceScale = _get_device_scale(cr);
+    CGContextSaveGState(cr);
+    CGContextDrawImage(cr, CGRectMake(0, 0, ncols/deviceScale, nrows/deviceScale), bitmap);
+    CGImageRelease(bitmap);
+    CGContextRestoreGState(cr);
+
+    return 0;
+}
+
+// Becomes -updateRubberbandWithDeviceX0:y0:x1:y1:
+- (void) setRubberband:(NSRect)rect
+{
+    // The space we want to redraw is a union of the previous rubberband
+    // with the new rubberband and then expanded (negative inset) by one
+    // in each direction to account for the stroke linewidth.
+    [self setNeedsDisplayInRect: NSInsetRect(NSUnionRect(rect, rubberband), -1, -1)];
+    rubberband = rect;
+}
+
+- (void) removeRubberband
+{
+    if (NSIsEmptyRect(rubberband)) { return; }
+    [self setNeedsDisplayInRect: rubberband];
+    rubberband = NSZeroRect;
+}
+
+
 @end

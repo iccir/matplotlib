@@ -1,7 +1,7 @@
 #define PY_SSIZE_T_CLEAN
-#include <Cocoa/Cocoa.h>
-#include <ApplicationServices/ApplicationServices.h>
-#include <Python.h>
+#import <Cocoa/Cocoa.h>
+#import <ApplicationServices/ApplicationServices.h>
+#import <Python.h>
 #import "MPLUtils.h"
 #import "MPLAppDelegate.h"
 #import "MPLFigureCanvas.h"
@@ -27,7 +27,7 @@
    exception was thrown.
 
    As a convenience, the RETURN_NULL_OR_NONE macro can be used for functions
-   that return a PyObject* */
+   that return a PyObject */
 #define BEGIN_OBJC_ENTRY \
     @autoreleasepool { @try {
 
@@ -58,7 +58,7 @@ static void errSetException(NSException *exception) {
 }
 
 // Stop the current app's run loop, sending an event to ensure it actually stops
-static void stopWithEvent() {
+static void stopWithEvent(void) {
     [NSApp stop: nil];
     // Post an event to trigger the actual stopping.
     // +[NSEvent otherEventWithType:...] is declared nullable but will not return
@@ -85,7 +85,7 @@ static void handleSigint(int signal) {
 // Helper function to flush all events.
 // This is needed in some instances to ensure e.g. that windows are properly closed.
 // It is used in the input hook as well as wrapped in a version callable from Python.
-static void flushEvents() {
+static void flushEvents(void) {
     while (true) {
         @autoreleasepool {
             NSEvent* event = [NSApp nextEventMatchingMask: NSEventMaskAny
@@ -100,7 +100,7 @@ static void flushEvents() {
     }
 }
 
-static int wait_for_stdin() {
+static int wait_for_stdin(void) {
     BEGIN_OBJC_ENTRY
 
     // Short circuit if no windows are active
@@ -159,7 +159,7 @@ static void lazy_init(void) {
 
     NSApp = [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-    appDelegate = [[MatplotlibAppDelegate alloc] init];
+    appDelegate = [[MPLAppDelegate alloc] init];
     [NSApp setDelegate:appDelegate];
 
     // Run our own event loop while waiting for stdin on the Python side
@@ -217,7 +217,7 @@ stop(PyObject* self, PyObject* _ /* ignored */)
 
 typedef struct {
     PyObject_HEAD
-    __strong View* view;
+    __strong MPLFigureCanvas *object;
 } FigureCanvas;
 
 static PyTypeObject FigureCanvasType;
@@ -239,7 +239,7 @@ static int
 FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
-    View *view;
+    MPLFigureCanvas *wrappedObject;
     NSTrackingArea *trackingArea;
     PyObject *builtins = NULL,
              *super_obj = NULL,
@@ -259,17 +259,17 @@ FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
         goto exit;
     }
     NSRect rect = NSMakeRect(0.0, 0.0, width, height);
-    view = [[View alloc] initWithFrame: rect];
-    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    wrappedObject = [[MPLFigureCanvas alloc] initWithFrame: rect];
+    wrappedObject.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     int opts = (NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
                 NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect);
     trackingArea = [[NSTrackingArea alloc] initWithRect: rect
                                                 options: opts
-                                                  owner: view
+                                                  owner: wrappedObject
                                                userInfo: nil];
-    [view addTrackingArea:trackingArea];
-    [view setCanvas: (PyObject*)self];
-    self->view = view;
+    [wrappedObject addTrackingArea:trackingArea];
+    [wrappedObject setPyObject:(PyObject*)self];
+    self->object = wrappedObject;
 
 exit:
     Py_XDECREF(super_obj);
@@ -285,8 +285,8 @@ static void
 FigureCanvas_dealloc(FigureCanvas* self)
 {
     BEGIN_OBJC_ENTRY
-    [self->view setCanvas: NULL];
-    self->view = nil;
+    [self->object setPyObject:NULL];
+    self->object = nil;
     END_OBJC_ENTRY
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -294,15 +294,15 @@ FigureCanvas_dealloc(FigureCanvas* self)
 static PyObject*
 FigureCanvas_repr(FigureCanvas* self)
 {
-    return PyUnicode_FromFormat("FigureCanvas object %p wrapping NSView %p",
-                               (void*)self, (__bridge void*)(self->view));
+    return PyUnicode_FromFormat("FigureCanvas<%p> wrapping MPLFigureCanvas<%p>",
+                               (void *)self, (__bridge void *)self->object);
 }
 
 static PyObject*
 FigureCanvas_update(FigureCanvas* self)
 {
     BEGIN_OBJC_ENTRY
-    [self->view setNeedsDisplay: YES];
+    [self->object setNeedsDisplay: YES];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE;
 }
@@ -320,7 +320,7 @@ FigureCanvas_flush_events(FigureCanvas* self)
 
     Py_END_ALLOW_THREADS
 
-    [self->view displayIfNeeded];
+    [self->object displayIfNeeded];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -356,22 +356,22 @@ static PyObject*
 FigureCanvas_set_rubberband(FigureCanvas* self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    View* view = self->view;
-    if (!view) {
-        PyErr_SetString(PyExc_RuntimeError, "NSView* is NULL");
+    MPLFigureCanvas *figureCanvas = self->object;
+    if (!figureCanvas) {
+        PyErr_SetString(PyExc_RuntimeError, "MPLFigureCanvas* is NULL");
         return NULL;
     }
     int x0, y0, x1, y1;
     if (!PyArg_ParseTuple(args, "iiii", &x0, &y0, &x1, &y1)) {
         return NULL;
     }
-    x0 /= view->device_scale;
-    x1 /= view->device_scale;
-    y0 /= view->device_scale;
-    y1 /= view->device_scale;
+    x0 /= figureCanvas->device_scale;
+    x1 /= figureCanvas->device_scale;
+    y0 /= figureCanvas->device_scale;
+    y1 /= figureCanvas->device_scale;
     NSRect rubberband = NSMakeRect(x0 < x1 ? x0 : x1, y0 < y1 ? y0 : y1,
                                    abs(x1 - x0), abs(y1 - y0));
-    [view setRubberband: rubberband];
+    [figureCanvas setRubberband: rubberband];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -380,7 +380,7 @@ static PyObject*
 FigureCanvas_remove_rubberband(FigureCanvas* self)
 {
     BEGIN_OBJC_ENTRY
-    [self->view removeRubberband];
+    [self->object removeRubberband];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -525,9 +525,9 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    View* view = ((FigureCanvas*)canvas)->view;
-    if (!view) {  /* Something really weird going on */
-        PyErr_SetString(PyExc_RuntimeError, "NSView* is NULL");
+    MPLFigureCanvas *figureCanvas = ((FigureCanvas*)canvas)->object;
+    if (!figureCanvas) {  /* Something really weird going on */
+        PyErr_SetString(PyExc_RuntimeError, "MPLFigureCanvas* is NULL");
         return -1;
     }
 
@@ -548,12 +548,12 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
                                                         | NSWindowStyleMaskMiniaturizable
                                                  backing: NSBackingStoreBuffered
                                                    defer: YES];
-    [window setDelegate: view];
+    [window setDelegate: figureCanvas];
     [window setManager: (PyObject*)self];
-    [window makeFirstResponder: view];
+    [window makeFirstResponder: figureCanvas];
     [window setReleasedWhenClosed:NO];
-    [[window contentView] addSubview: view];
-    [view updateDevicePixelRatio: [window backingScaleFactor]];
+    [[window contentView] addSubview: figureCanvas];
+    [figureCanvas updateDevicePixelRatio: [window backingScaleFactor]];
 
     self->window = window;
     ++FigureWindowCount;
@@ -586,8 +586,8 @@ FigureManager__set_window_mode(FigureManager* self, PyObject* args)
 static PyObject*
 FigureManager_repr(FigureManager* self)
 {
-    return PyUnicode_FromFormat("FigureManager object %p wrapping NSWindow %p",
-                               (void*) self, (__bridge void*)(self->window));
+    return PyUnicode_FromFormat("FigureManager<%p> wrapping Window<%p>",
+                               (void *)self, (__bridge void *)(self->window));
 }
 
 static void
@@ -803,7 +803,7 @@ static PyTypeObject FigureManagerType = {
 typedef struct {
     PyObject_HEAD
     __strong NSTextView* messagebox;
-    __strong NavigationToolbar2Handler* handler;
+    __strong MPLNavigationToolbar2 *object;
     int height;
 } NavigationToolbar2;
 
@@ -839,19 +839,19 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
         return -1;
     }
 
-    View* view = canvas->view;
-    if (!view) {
-        PyErr_SetString(PyExc_RuntimeError, "NSView* is NULL");
+    MPLFigureCanvas *figureCanvas = canvas->object;
+    if (!figureCanvas) {
+        PyErr_SetString(PyExc_RuntimeError, "MPLFigureCanvas* is NULL");
         return -1;
     }
 
     self->height = height;
 
-    NSRect bounds = [view bounds];
-    NSWindow* window = [view window];
+    NSRect bounds = [figureCanvas bounds];
+    NSWindow* window = [figureCanvas window];
 
     bounds.origin.y += height;
-    [view setFrame: bounds];
+    [figureCanvas setFrame: bounds];
 
     bounds.size.height += height;
     [window setContentSize: bounds.size];
@@ -907,10 +907,10 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
         rect.origin.x += rect.size.width + gap;
     }
 
-    NavigationToolbar2Handler *handler;
-    handler = [[NavigationToolbar2Handler alloc] init];
-    [handler setToolbar:(PyObject*)self];
-    [handler installCallbacks: actions forButtons: buttons];
+    MPLNavigationToolbar2 *wrappedObject;
+    wrappedObject = [[MPLNavigationToolbar2 alloc] init];
+    [wrappedObject setPyObject:(PyObject*)self];
+    [wrappedObject installCallbacks: actions forButtons: buttons];
 
     NSFont* font = [NSFont systemFontOfSize: 0.0];
     // rect.origin.x is now at the far right edge of the buttons
@@ -930,7 +930,7 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
     [[window contentView] addSubview: messagebox];
     [[window contentView] display];
 
-    self->handler = handler;
+    self->object = wrappedObject;
     self->messagebox = messagebox;
     END_OBJC_ENTRY
     return 0;
@@ -940,8 +940,8 @@ static void
 NavigationToolbar2_dealloc(NavigationToolbar2 *self)
 {
     BEGIN_OBJC_ENTRY
-    [self->handler setToolbar:NULL];
-    self->handler = nil;
+    [self->object setPyObject:NULL];
+    self->object = nil;
     self->messagebox = nil;
     END_OBJC_ENTRY
     Py_TYPE(self)->tp_free((PyObject*)self);
@@ -950,7 +950,8 @@ NavigationToolbar2_dealloc(NavigationToolbar2 *self)
 static PyObject*
 NavigationToolbar2_repr(NavigationToolbar2* self)
 {
-    return PyUnicode_FromFormat("NavigationToolbar2 object %p", (void*)self);
+    return PyUnicode_FromFormat("NavigationToolbar2<%p> wrapping MPLNavigationToolbar2<%p>",
+                               (void *)self, (__bridge void *)self->object);
 }
 
 static PyObject*
@@ -1092,8 +1093,8 @@ Timer_new(PyTypeObject* type, PyObject *args, PyObject *kwds)
 static PyObject*
 Timer_repr(Timer* self)
 {
-    return PyUnicode_FromFormat("Timer object %p wrapping NSTimer %p",
-                               (void*) self, (__bridge void*)(self->timer));
+    return PyUnicode_FromFormat("Timer<%p> wrapping NSTimer<%p>",
+                               (void *)self, (__bridge void *)self->timer);
 }
 
 static void
