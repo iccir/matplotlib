@@ -502,7 +502,7 @@ static PyTypeObject FigureManagerType;  // forward declaration, needed in destro
 
 typedef struct {
     PyObject_HEAD
-    __strong Window* window;
+    __strong Window *object;
 } FigureManager;
 
 static PyObject *
@@ -559,13 +559,13 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
                                                  backing: NSBackingStoreBuffered
                                                    defer: YES];
     [window setDelegate: figureCanvas];
-    [window setManager: (PyObject*)self];
     [window makeFirstResponder: figureCanvas];
     [window setReleasedWhenClosed:NO];
     [[window contentView] addSubview: figureCanvas];
     [figureCanvas updateDevicePixelRatio: [window backingScaleFactor]];
 
-    self->window = window;
+    self->object = window;
+    [self->object setPyObject:(PyObject *)self];
     ++FigureWindowCount;
 
     END_OBJC_ENTRY
@@ -585,18 +585,18 @@ static PyObject *
 FigureManager__set_window_mode(FigureManager *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    const char* window_mode;
-    if (!PyArg_ParseTuple(args, "s", &window_mode) || !self->window) {
+    const char *window_mode;
+    if (!PyArg_ParseTuple(args, "s", &window_mode) || !self->object) {
         return NULL;
     }
 
     NSString* window_mode_str = [NSString stringWithUTF8String: window_mode];
     if ([window_mode_str isEqualToString: @"tab"]) {
-        [self->window setTabbingMode: NSWindowTabbingModePreferred];
+        [self->object setTabbingMode: NSWindowTabbingModePreferred];
     } else if ([window_mode_str isEqualToString: @"window"]) {
-        [self->window setTabbingMode: NSWindowTabbingModeDisallowed];
+        [self->object setTabbingMode: NSWindowTabbingModeDisallowed];
     } else { // system settings
-        [self->window setTabbingMode: NSWindowTabbingModeAutomatic];
+        [self->object setTabbingMode: NSWindowTabbingModeAutomatic];
     }
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
@@ -606,18 +606,18 @@ static PyObject *
 FigureManager_repr(FigureManager *self)
 {
     return PyUnicode_FromFormat("FigureManager<%p> wrapping Window<%p>",
-                               (void *)self, (__bridge void *)(self->window));
+                                (void *)self, (__bridge void *)self->object);
 }
 
 static void
 FigureManager__closeAndClearWindow(FigureManager *self)
 {
-    if (self->window) {
-        [self->window close];
-        [self->window setDelegate:nil];
-        [self->window setManager:NULL];
+    if (self->object) {
+        [self->object close];
+        [self->object setDelegate:nil];
+        [self->object setPyObject:NULL];
+        self->object = nil;
 
-        self->window = nil;
         if (--FigureWindowCount == 0 && IsRunningFromShow) {
             [NSApp stop:nil];
         }
@@ -637,7 +637,7 @@ static PyObject *
 FigureManager__show(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    [self->window makeKeyAndOrderFront: nil];
+    [self->object makeKeyAndOrderFront: nil];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -646,7 +646,7 @@ static PyObject *
 FigureManager__raise(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    [self->window orderFrontRegardless];
+    [self->object orderFrontRegardless];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -727,7 +727,7 @@ FigureManager_set_window_title(FigureManager* self,
     // PyArg_ParseTuple "s" guarantees valid UTF-8, so stringWithUTF8String: will
     // not return nil here; the nullable annotation is a false positive.
     // NOLINTNEXTLINE(clang-analyzer-nullability.NullablePassedToNonnull)
-    [self->window setTitle: [NSString stringWithUTF8String: title]];
+    [self->object setTitle: [NSString stringWithUTF8String: title]];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -736,7 +736,7 @@ static PyObject *
 FigureManager_get_window_title(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    NSString *title = [self->window title];
+    NSString *title = [self->object title];
     if (title) {
         return PyUnicode_FromString([title UTF8String]);
     }
@@ -752,7 +752,7 @@ FigureManager_resize(FigureManager *self, PyObject *args, PyObject *kwds)
     if (!PyArg_ParseTuple(args, "ii", &width, &height)) {
         return NULL;
     }
-    Window* window = self->window;
+    Window* window = self->object;
     if (window) {
         CGFloat device_pixel_ratio = [window backingScaleFactor];
         width /= device_pixel_ratio;
@@ -768,7 +768,7 @@ static PyObject *
 FigureManager_full_screen_toggle(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    [self->window toggleFullScreen: nil];
+    [self->object toggleFullScreen: nil];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }

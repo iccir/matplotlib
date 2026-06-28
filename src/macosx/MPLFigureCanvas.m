@@ -226,7 +226,7 @@ exit:
     // will go away with next refactor
     Window *window = (Window *)[self window];
     if ([window isKindOfClass:[Window class]]) {
-        gil_call_method([window manager], "_handle_window_will_close");
+        gil_call_method([window pyObject], "_handle_window_will_close");
     }
 }
 
@@ -237,7 +237,7 @@ exit:
     // will go away with next refactor
     Window *window = (Window *)[self window];
     if ([window isKindOfClass:[Window class]]) {
-        gil_call_method([window manager], "_handle_window_should_close");
+        gil_call_method([window pyObject], "_handle_window_should_close");
     }
     return YES;
 }
