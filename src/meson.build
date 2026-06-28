@@ -136,16 +136,5 @@ foreach ext, kwargs : extension_data
 endforeach
 
 if get_option('macosx') and host_machine.system() == 'darwin'
-  add_languages('objc', native: false)
-  py3.extension_module(
-    '_macosx',
-    subdir: 'matplotlib/backends',
-    sources: files(
-      '_macosx.m',
-    ),
-    dependencies: dependency('appleframeworks', modules: 'Cocoa'),
-    override_options: ['werror=true'],
-    objc_args: ['-fobjc-arc'],
-    install: true,
-  )
+  subdir('macosx')
 endif
