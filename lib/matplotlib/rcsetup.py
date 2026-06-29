@@ -1363,6 +1363,9 @@ _validators = {
     "figure.autolayout":       validate_bool,
     "figure.max_open_warning": validate_int,
     "figure.raise_window":     validate_bool,
+
+    "macosx.app_icon":         ["light", "dark"],
+    "macosx.appearance":       ["system", "light", "dark"],
     "macosx.window_mode":      ["system", "tab", "window"],
 
     "figure.subplot.left":   validate_float,
@@ -3130,13 +3133,26 @@ _DEFINITION = [
         validator=["landscape", "portrait"],
         description="orientation of saved figure, for PostScript output only"
     ),
-    _Subsection("Mac OSX backend parameters"),
+    _Subsection("MacOSX backend parameters"),
+    _Param(
+        "macosx.app_icon",
+        default="light",
+        validator=["light", "dark"],
+        description="Whether the application icon uses a light or dark style"
+    ),
+    _Param(
+        "macosx.appearance",
+        default="system",
+        validator=["system", "light", "dark"],
+        description="Whether windows and controls use a light or dark appearance. "
+                    "'system' uses 'Appearance' from System Settings."
+    ),
     _Param(
         "macosx.window_mode",
         default="system",
         validator=["system", "tab", "window"],
-        description="How to open new figures (system, tab, window) system uses "
-                    "the MacOS system preferences"
+        description="How to open new figures (system, tab, window). "
+                    "'system' uses 'Prefer tabs...' from System Settings."
     ),
     _Subsection("Tk backend parameters"),
     _Param(
