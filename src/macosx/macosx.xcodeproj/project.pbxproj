@@ -36,6 +36,7 @@
 		558CF5972FF1B0730077012B /* MPLNavigationToolbar2.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MPLNavigationToolbar2.m; sourceTree = "<group>"; };
 		558CF59E2FF2EA3D0077012B /* MPLSubplotTool.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MPLSubplotTool.h; sourceTree = "<group>"; };
 		558CF59F2FF2EA3D0077012B /* MPLSubplotTool.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MPLSubplotTool.m; sourceTree = "<group>"; };
+		55C082982FF6E60100FCD84B /* Rework.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Rework.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,6 +101,7 @@
 			isa = PBXGroup;
 			children = (
 				555111822FD9F032005F654C /* meson.build */,
+				55C082982FF6E60100FCD84B /* Rework.md */,
 			);
 			name = Build;
 			sourceTree = "<group>";
