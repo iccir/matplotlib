@@ -71,26 +71,12 @@ static const CGFloat sButtonGap = 2;
 
     [self addSubview:messageField];
 
-    __auto_type constraint = ^(
-        NSLayoutAttribute fieldAttribute,
-        id toItem, NSLayoutAttribute toItemAttribute,
-        CGFloat constant
-    ) {
-        return [NSLayoutConstraint constraintWithItem: messageField attribute: fieldAttribute
-                                            relatedBy: NSLayoutRelationEqual
-                                               toItem: toItem attribute: toItemAttribute
-                                           multiplier: 1
-                                             constant: constant];
-    };
-
-    NSView *container = _buttonContainer;
-       
-    [self addConstraints:@[
-        constraint(NSLayoutAttributeLeft,    container, NSLayoutAttributeRight,   sButtonGap),
-        constraint(NSLayoutAttributeRight,   self,      NSLayoutAttributeRight,  -sButtonGap),
-        constraint(NSLayoutAttributeCenterY, self,      NSLayoutAttributeCenterY, 0)
+    [NSLayoutConstraint activateConstraints:@[
+        [[messageField leftAnchor]    constraintEqualToAnchor:[_buttonContainer rightAnchor]],
+        [[messageField rightAnchor]   constraintEqualToAnchor:[self rightAnchor] constant:-sButtonGap],
+        [[messageField centerYAnchor] constraintEqualToAnchor:[self centerYAnchor]]
     ]];
-
+    
     _messageField = messageField;
 }
 

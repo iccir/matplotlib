@@ -8,6 +8,7 @@ py3.extension_module(
     'MPLFigureCanvas.m',
     'MPLFigureManager.m',
     'MPLNavigationToolbar2.m',
+    'MPLSubplotTool.m',
     'MPLUtils.m',
   ),
   dependencies: dependency('appleframeworks', modules: 'Cocoa'),
