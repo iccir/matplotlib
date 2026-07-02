@@ -9,6 +9,29 @@
 @property (nonatomic) double top;
 @property (nonatomic) double wspace;
 @property (nonatomic) double hspace;
+
+- (void) copyValues:(id)sender;
+
+@end
+
+
+@interface MPLSubplotToolContentView : NSView
+@property (nonatomic, weak) MPLSubplotTool *subplotTool;
+@end
+
+
+@implementation MPLSubplotToolContentView
+
+- (BOOL) acceptsFirstResponder
+{
+    return YES;
+}
+
+- (void) copy:(id)sender
+{
+    [_subplotTool copyValues:self];
+}
+
 @end
 
 
@@ -41,8 +64,13 @@
                                                        defer: YES
                                                       screen: [[manager window] screen]];
 
+    CGRect contentFrame = [[window contentView] frame];
+    MPLSubplotToolContentView *contentView = [[MPLSubplotToolContentView alloc] initWithFrame:contentFrame];
+    [contentView setSubplotTool:self];
+    [window setContentView:contentView];
+
     [window setAppearance:[[manager window] appearance]];
-    [window makeFirstResponder:window];
+    [window makeFirstResponder:contentView];
     [window setTitle:[NSString stringWithFormat:@"%@ Subplots", [manager windowTitle]]];
     [window setDelegate:self];
     [window setReleasedWhenClosed:NO];
