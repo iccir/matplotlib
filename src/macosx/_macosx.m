@@ -915,10 +915,7 @@ show(PyObject *self)
     // autorelease pool, wrap in @autoreleasepool as -[NSApp run] is long-running.
     @autoreleasepool {
         [NSApp activateIgnoringOtherApps: YES];
-        NSArray *windowsArray = [NSApp windows];
-        NSEnumerator *enumerator = [windowsArray objectEnumerator];
-        NSWindow *window;
-        while ((window = [enumerator nextObject])) {
+        for (NSWindow *window in [NSApp windows]) {
             [window orderFront:nil];
         }
     }
