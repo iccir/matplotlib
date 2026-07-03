@@ -78,7 +78,7 @@ class FigureCanvasMac(FigureCanvasAgg, _macosx.FigureCanvas, FigureCanvasBase):
     def blit(self, bbox=None):
         # docstring inherited
         super().blit(bbox)
-        self.draw()
+        self.update_layer(self.get_renderer().buffer_rgba())
 
     def _handle_resize(self, width, height):
         # Size from macOS is physical pixels
