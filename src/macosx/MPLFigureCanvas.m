@@ -81,25 +81,15 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
 
 - (void) viewDidChangeBackingProperties
 {
-    PyObject* change = NULL;
-    PyGILState_STATE gstate = PyGILState_Ensure();
-
     CGFloat scaleFactor = [[self window] backingScaleFactor];
     if (!scaleFactor) scaleFactor = 1;
 
-    if (!(change = PyObject_CallMethod(_pyObject, "_set_device_pixel_ratio", "d", scaleFactor))) {
-        PyErr_Print();
-        goto exit;
-    }
-    if (PyObject_IsTrue(change)) {
-        [self _callHandleResize];
-        [self requestDisplayLayerWithNeedsDraw:YES];
-    }
+    int width, height;
+    [self _getDeviceSizeWithSize:[self frame].size width:&width height:&height];
 
-  exit:
-    Py_XDECREF(change);
-
-    PyGILState_Release(gstate);
+    MPLCallMethod(_pyObject, "_handle_view_did_change_backing_properties", "dii",
+        scaleFactor, width, height
+    );
 }
 
 - (void) setFrameSize:(NSSize)newSize
@@ -156,10 +146,8 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
 
 - (void) _callHandleResize
 {
-    CGSize frameSize = [self frame].size;
-    CGSize backingSize = [self convertSizeToBacking:frameSize];
-    int width  = backingSize.width;
-    int height = backingSize.height;
+    int width, height;
+    [self _getDeviceSizeWithSize:[self frame].size width:&width height:&height];
 
     MPLCallMethod(_pyObject, "_handle_resize", "ii", width, height);
 }

@@ -78,6 +78,12 @@ class FigureCanvasMac(FigureCanvasAgg, _macosx.FigureCanvas, FigureCanvasBase):
         super().blit(bbox)
         self._request_display_layer(False)
 
+    def _handle_view_did_change_backing_properties(self, scale, width, height):
+        # Size from macOS is physical pixels
+        if self._set_device_pixel_ratio(scale):
+            self._handle_resize(width, height)
+            self.draw_idle()     
+
     def _handle_resize(self, width, height):
         # Size from macOS is physical pixels
         scale = self.figure.dpi
