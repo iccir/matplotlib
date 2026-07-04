@@ -226,6 +226,10 @@ class FigureManagerMac(_macosx.FigureManager, FigureManagerBase):
         Gcf.destroy(self)
         self.canvas.flush_events()
 
+    def destroy(self):
+        self._close_and_clear_window()
+        super().destroy()
+        
     @classmethod
     def start_main_loop(cls):
         # Set up a SIGINT handler to allow terminating a plot via CTRL-C.

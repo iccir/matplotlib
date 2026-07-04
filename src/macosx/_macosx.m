@@ -561,7 +561,7 @@ FigureManager_repr(FigureManager *self)
 }
 
 static void
-FigureManager__closeAndClearWindow(FigureManager *self)
+FigureManager__close_and_clear_window_impl(FigureManager *self)
 {
     if (self->object) {
         [self->object close];
@@ -578,7 +578,7 @@ static void
 FigureManager_dealloc(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    FigureManager__closeAndClearWindow(self);
+    FigureManager__close_and_clear_window_impl(self);
     END_OBJC_ENTRY
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -602,29 +602,10 @@ FigureManager__raise(FigureManager *self)
 }
 
 static PyObject *
-FigureManager_destroy(FigureManager *self)
+FigureManager__close_and_clear_window(FigureManager *self)
 {
     BEGIN_OBJC_ENTRY
-    FigureManager__closeAndClearWindow(self);
-
-    // call super(self, FigureManager).destroy() - it seems we need the
-    // explicit arguments, and just super() doesn't work in the C API.
-    PyObject *super_obj = PyObject_CallFunctionObjArgs(
-        (PyObject *)&PySuper_Type,
-        (PyObject *)&FigureManagerType,
-        self,
-        NULL
-    );
-    if (super_obj == NULL) {
-        return NULL; // error
-    }
-    PyObject *result = PyObject_CallMethod(super_obj, "destroy", NULL);
-    Py_DECREF(super_obj);
-    if (result == NULL) {
-        return NULL; // error
-    }
-    Py_DECREF(result);
-
+    FigureManager__close_and_clear_window_impl(self);
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -693,8 +674,8 @@ static PyTypeObject FigureManagerType = {
         {"_raise",
          (PyCFunction)FigureManager__raise,
          METH_NOARGS},
-        {"destroy",
-         (PyCFunction)FigureManager_destroy,
+        {"_close_and_clear_window",
+         (PyCFunction)FigureManager__close_and_clear_window,
          METH_NOARGS},
         {"_set_window_appearance",
          (PyCFunction)FigureManager__set_window_appearance,
