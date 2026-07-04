@@ -47,6 +47,7 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
     NSInteger _emulatedLeftMouseDownButton;
     NSEventModifierFlags _previousModifierFlags;
     MPLRubberbandView *_rubberbandView;
+    BOOL _needsDrawOnNextDisplayLayer;
 }
 
 - (instancetype) initWithFrame:(NSRect)rect
@@ -92,7 +93,7 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
     }
     if (PyObject_IsTrue(change)) {
         [self _callHandleResize];
-        [self requestIdleDraw];
+        [self requestDisplayLayerWithNeedsDraw:YES];
     }
 
   exit:
@@ -121,7 +122,7 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
 
 - (void) displayLayer:(CALayer *)layer
 {
-    MPLCallMethod(_pyObject, "_handle_display_layer", NULL);
+    MPLCallMethod(_pyObject, "_handle_display_layer", "p", _needsDrawOnNextDisplayLayer);
 }
 
 - (nullable id<CAAction>) actionForLayer:(CALayer *)layer forKey:(NSString *)event
@@ -408,7 +409,7 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
 
 #pragma mark - Public Methods
 
-- (void) updateLayerWithBuffer:(PyObject *)pyObject
+- (void) updateLayerContentsWithBuffer:(PyObject *)pyObject
 {
     Py_buffer *buffer = malloc(sizeof(Py_buffer));
 
@@ -493,16 +494,17 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
     [self _updateRubberbandViewWithFrame:CGRectZero];
 }
 
-- (void) requestIdleDraw
+- (void) requestDisplayLayerWithNeedsDraw:(BOOL)needsDraw
 {
     if ([NSThread isMainThread]) {
+        _needsDrawOnNextDisplayLayer = needsDraw;
         [[self layer] setNeedsDisplay];
 
     } else {
         __weak id weakSelf = self;
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            [[weakSelf layer] setNeedsDisplay];
+            [weakSelf requestDisplayLayerWithNeedsDraw:needsDraw];
         });
     }
 }

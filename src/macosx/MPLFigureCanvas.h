@@ -9,11 +9,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype) initWithFrame:(NSRect)rect;
 
-- (void) updateLayerWithBuffer:(PyObject *)buffer;
+- (void) updateLayerContentsWithBuffer:(PyObject *)buffer;
 - (void) updateCursorType:(int)cursorType;
 - (void) updateRubberbandWithDeviceX0:(int)x0 y0:(int)y0 x1:(int)x1 y1:(int)y1;
 - (void) removeRubberband;
-- (void) requestIdleDraw; // Thread-safe
+- (void) requestDisplayLayerWithNeedsDraw:(BOOL)needsDraw; // Thread-safe
 
 @property (nonatomic, assign, nullable) PyObject *pyObject;
 

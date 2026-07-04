@@ -56,29 +56,27 @@ class FigureCanvasMac(FigureCanvasAgg, _macosx.FigureCanvas, FigureCanvasBase):
     def __init__(self, figure):
         _init_macosx()
         super().__init__(figure=figure)
-        self._is_drawing = False
 
     def draw(self):
         """Render the figure and send the buffer to the macOS CALayer."""
-        if self._is_drawing:
-            return
-        with cbook._setattr_cm(self, _is_drawing=True):
-            super().draw()
-        self.update_layer(self.get_renderer().buffer_rgba())
+        super().draw()
+        if not self._is_idle_drawing:
+            self._request_display_layer(False)
+
+    def _handle_display_layer(self, needs_draw):
+        with self._idle_draw_cntx():
+            if needs_draw:
+                self.draw()
+            self._update_layer_contents(self.get_renderer().buffer_rgba())
 
     def draw_idle(self):
         # docstring inherited
-        if not (getattr(self, '_is_drawing', False)):
-            self.request_idle_draw()
-
-    def _handle_display_layer(self):
-        with self._idle_draw_cntx():
-            self.draw()
+        self._request_display_layer(True)
 
     def blit(self, bbox=None):
         # docstring inherited
         super().blit(bbox)
-        self.update_layer(self.get_renderer().buffer_rgba())
+        self._request_display_layer(False)
 
     def _handle_resize(self, width, height):
         # Size from macOS is physical pixels

@@ -300,12 +300,12 @@ FigureCanvas_repr(FigureCanvas *self)
 }
 
 static PyObject *
-FigureCanvas_update_layer(FigureCanvas *self, PyObject *args)
+FigureCanvas_update_layer_contents(FigureCanvas *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     PyObject *buffer;
     if (!PyArg_ParseTuple(args, "O", &buffer)) { return NULL; }
-    [self->object updateLayerWithBuffer:buffer];
+    [self->object updateLayerContentsWithBuffer:buffer];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE;
 }
@@ -323,16 +323,20 @@ FigureCanvas_flush_events(FigureCanvas *self)
 
     Py_END_ALLOW_THREADS
 
-    [self->object requestIdleDraw];
+    [self->object requestDisplayLayerWithNeedsDraw:NO];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
 
 static PyObject *
-FigureCanvas_request_idle_draw(FigureCanvas *self)
+FigureCanvas_request_display_layer(FigureCanvas *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    [self->object requestIdleDraw];
+
+    int needsDraw;
+    if (!PyArg_ParseTuple(args, "p", &needsDraw)) { return NULL; }
+
+    [self->object requestDisplayLayerWithNeedsDraw:(needsDraw > 0)];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -446,17 +450,17 @@ static PyTypeObject FigureCanvasType = {
     .tp_repr = (reprfunc)FigureCanvas_repr,
 
     .tp_methods = (PyMethodDef[]){
-        {"update_layer",
-         (PyCFunction)FigureCanvas_update_layer,
+        {"_update_layer_contents",
+         (PyCFunction)FigureCanvas_update_layer_contents,
          METH_VARARGS,
          NULL},  // docstring inherited
         {"flush_events",
          (PyCFunction)FigureCanvas_flush_events,
          METH_NOARGS,
          NULL},  // docstring inherited
-        {"request_idle_draw",
-         (PyCFunction)FigureCanvas_request_idle_draw,
-         METH_NOARGS,
+        {"_request_display_layer",
+         (PyCFunction)FigureCanvas_request_display_layer,
+         METH_VARARGS,
          NULL},  // docstring inherited
         {"set_cursor",
          (PyCFunction)FigureCanvas_set_cursor,
