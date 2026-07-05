@@ -117,6 +117,10 @@
     [NSApp setHelpMenu:currentMenu];
 
     [NSApp setMainMenu:mainMenu];
+    
+    for (NSWindow *window in [NSApp windows]) {
+        [NSApp addWindowsItem:window title:[window title] filename:NO];
+    }
 }
 
 - (void) _buildAppIcon
