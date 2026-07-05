@@ -21,6 +21,7 @@
 
 - [28249: font finding in OSX produces 200+ lines of warnings](https://github.com/matplotlib/matplotlib/issues/28249).
 - [31965: Possibly use CoreText to find fonts for faster performance](https://github.com/matplotlib/matplotlib/issues/31965)
+
 #### Issued fixed in "macosx-staging" branch:
 
 - *None currently*
@@ -28,6 +29,7 @@
 #### Issued fixed in "macosx-rework" branch:
 
 - [27592: Add dark mode for subplot configuration tool](https://github.com/matplotlib/matplotlib/issues/27592).
+- [30419: Event handling with input in callback function](https://github.com/matplotlib/matplotlib/issues/30419)
 - [31770: macOS backend lacks standard keyboard shortcuts](https://github.com/matplotlib/matplotlib/issues/31770)
 - [31813: macOS backend uses un-prefixed class names](https://github.com/matplotlib/matplotlib/issues/31813)
 - [31875: macOS backend likely double-draws renderer output](https://github.com/matplotlib/matplotlib/issues/31875)
@@ -39,7 +41,7 @@
 
 #### Issues to investigate:
 
-- [30419: Event handling with input in callback function](https://github.com/matplotlib/matplotlib/issues/30419)
+- *None currently*
 
 
 ### Todo

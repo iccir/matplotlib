@@ -15,7 +15,6 @@
 #endif
 
 
-
 /* When calling into Objective-C from Python, wrap the calls with
    BEGIN_OBJC_ENTRY and END_OBJC_ENTRY. This will set up an autorelease
    pool as well as catch any Obj-C exceptions thrown. These macros
@@ -56,14 +55,16 @@ static void errSetException(NSException *exception) {
     PyErr_SetString(PyExc_RuntimeError, [[exception reason] UTF8String]);
 }
 
-
 // Signal handler for SIGINT, only argument matching for stopWithEvent
-static void handleSigint(int signal) {
+static void
+handleSigint(int signal)
+{
     [[MPLEventLoop sharedInstance] stop];
 }
 
-
-static int wait_for_stdin(void) {
+static int
+wait_for_stdin(void)
+{
     BEGIN_OBJC_ENTRY
 
     // Short circuit if no windows are active
@@ -89,92 +90,6 @@ static int wait_for_stdin(void) {
 
     END_OBJC_ENTRY
     return 0;
-}
-
-
-/* ---------------------------- Python classes ---------------------------- */
-
-static bool backend_inited = false;
-
-static PyObject *_init(PyObject *unused, PyObject *args) {
-    BEGIN_OBJC_ENTRY
-
-    PyObject *imagesDict;
-    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesDict)) { return NULL; }
-    
-    NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesDict);
-    if (!imagesDictionary) { return NULL; }
-
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        if (!NSApp) {
-            NSApp = [NSApplication sharedApplication];
-        }
-
-        if (![NSApp delegate]) {
-            appDelegate = [[MPLAppDelegate alloc] initWithImageDictionary:imagesDictionary];
-            [NSApp setDelegate:appDelegate];
-        }
-
-        backend_inited = true;
-
-        // Run our own event loop while waiting for stdin on the Python side
-        // this is needed to keep the application responsive while waiting for input
-        PyOS_InputHook = wait_for_stdin;
-    });
-    
-    END_OBJC_ENTRY
-    RETURN_NULL_OR_NONE
-}
-
-static PyObject *
-event_loop_is_running(PyObject *self)
-{
-    BEGIN_OBJC_ENTRY
-
-    if (backend_inited) {
-        Py_RETURN_TRUE;
-    } else {
-        Py_RETURN_FALSE;
-    }
-
-    END_OBJC_ENTRY
-    RETURN_NULL_OR_NONE
-}
-
-static PyObject *
-wake_on_fd_write(PyObject *unused, PyObject *args)
-{
-    BEGIN_OBJC_ENTRY
-    int fd;
-    if (!PyArg_ParseTuple(args, "i", &fd)) { return NULL; }
-
-    dispatch_source_t source = dispatch_source_create(
-        DISPATCH_SOURCE_TYPE_READ, fd, 0,
-        dispatch_get_main_queue()
-    );
-
-    dispatch_source_set_event_handler(source, ^{
-        PyGILState_STATE gstate = PyGILState_Ensure();
-        PyErr_CheckSignals();
-        PyGILState_Release(gstate);
-
-        dispatch_source_cancel(source);
-    });
-
-    dispatch_resume(source);    
-
-    END_OBJC_ENTRY
-    RETURN_NULL_OR_NONE
-}
-
-static PyObject *
-stop(PyObject *self, PyObject *unused)
-{
-    BEGIN_OBJC_ENTRY
-    [[MPLEventLoop sharedInstance] stop];
-    END_OBJC_ENTRY
-    RETURN_NULL_OR_NONE
 }
 
 
@@ -776,63 +691,6 @@ static PyTypeObject NavigationToolbar2Type = {
     },
 };
 
-static PyObject *
-choose_save_file(PyObject *unused, PyObject *args)
-{
-    BEGIN_OBJC_ENTRY
-
-    NSArray<NSString *> *strings = MPLGetStringArrayWithPySequence(args);
-    if ([strings count] != 3) {
-        PyErr_SetString(PyExc_RuntimeError, "Invalid arguments to choose_save_file");
-        return NULL;
-    }
-    
-    NSString *title = [strings objectAtIndex:0];
-    NSString *directory = [strings objectAtIndex:1];
-    NSString *defaultFilename = [strings objectAtIndex:2];
-
-    NSSavePanel *panel = [NSSavePanel savePanel];
-    [panel setTitle:title];
-    [panel setDirectoryURL:[NSURL fileURLWithPath:directory isDirectory:YES]];
-    [panel setNameFieldStringValue:defaultFilename];
-
-    if ([panel runModal] == NSModalResponseOK) {
-        NSString *filename = [[panel URL] path];
-        if (!filename) {
-            PyErr_SetString(PyExc_RuntimeError, "Failed to obtain filename");
-            return 0;
-        }
-        return PyUnicode_FromString([filename UTF8String]);
-    }
-
-    END_OBJC_ENTRY
-    RETURN_NULL_OR_NONE
-}
-
-static PyObject *
-show(PyObject *self)
-{
-    BEGIN_OBJC_ENTRY
-
-    // Iterating over -[NSApp windows] will add the windows to the topmost
-    // autorelease pool, wrap in @autoreleasepool as -[NSApp run] is long-running.
-    @autoreleasepool {
-        [NSApp activateIgnoringOtherApps: YES];
-        for (NSWindow *window in [NSApp windows]) {
-            [window orderFront:nil];
-        }
-    }
-
-    Py_BEGIN_ALLOW_THREADS
-    [[MPLEventLoop sharedInstance] runUntilStopCondition:^{
-        return (BOOL)(FigureWindowCount == 0);
-    }];
-    Py_END_ALLOW_THREADS
-
-    END_OBJC_ENTRY
-    RETURN_NULL_OR_NONE
-}
-
 
 #pragma mark - Timer Type
 
@@ -1070,7 +928,149 @@ static PyTypeObject SubplotToolType = {
 };
 
 
-#pragma mark - Module Definition
+#pragma mark - Module
+
+static bool backend_inited = false;
+
+static PyObject *
+_init(PyObject *unused, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+
+    PyObject *imagesDict;
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesDict)) { return NULL; }
+    
+    NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesDict);
+    if (!imagesDictionary) { return NULL; }
+
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        if (!NSApp) {
+            NSApp = [NSApplication sharedApplication];
+        }
+
+        if (![NSApp delegate]) {
+            appDelegate = [[MPLAppDelegate alloc] initWithImageDictionary:imagesDictionary];
+            [NSApp setDelegate:appDelegate];
+        }
+
+        backend_inited = true;
+
+        // Run our own event loop while waiting for stdin on the Python side
+        // this is needed to keep the application responsive while waiting for input
+        PyOS_InputHook = wait_for_stdin;
+    });
+    
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+event_loop_is_running(PyObject *self)
+{
+    BEGIN_OBJC_ENTRY
+
+    if (backend_inited) {
+        Py_RETURN_TRUE;
+    } else {
+        Py_RETURN_FALSE;
+    }
+
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+wake_on_fd_write(PyObject *unused, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+    int fd;
+    if (!PyArg_ParseTuple(args, "i", &fd)) { return NULL; }
+
+    dispatch_source_t source = dispatch_source_create(
+        DISPATCH_SOURCE_TYPE_READ, fd, 0,
+        dispatch_get_main_queue()
+    );
+
+    dispatch_source_set_event_handler(source, ^{
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        PyErr_CheckSignals();
+        PyGILState_Release(gstate);
+
+        dispatch_source_cancel(source);
+    });
+
+    dispatch_resume(source);    
+
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+stop(PyObject *self, PyObject *unused)
+{
+    BEGIN_OBJC_ENTRY
+    [[MPLEventLoop sharedInstance] stop];
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+show(PyObject *self)
+{
+    BEGIN_OBJC_ENTRY
+
+    // Iterating over -[NSApp windows] will add the windows to the topmost
+    // autorelease pool, wrap in @autoreleasepool as -[NSApp run] is long-running.
+    @autoreleasepool {
+        [NSApp activateIgnoringOtherApps: YES];
+        for (NSWindow *window in [NSApp windows]) {
+            [window orderFront:nil];
+        }
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+    [[MPLEventLoop sharedInstance] runUntilStopCondition:^{
+        return (BOOL)(FigureWindowCount == 0);
+    }];
+    Py_END_ALLOW_THREADS
+
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+choose_save_file(PyObject *unused, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+
+    NSArray<NSString *> *strings = MPLGetStringArrayWithPySequence(args);
+    if ([strings count] != 3) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid arguments to choose_save_file");
+        return NULL;
+    }
+    
+    NSString *title = [strings objectAtIndex:0];
+    NSString *directory = [strings objectAtIndex:1];
+    NSString *defaultFilename = [strings objectAtIndex:2];
+
+    NSSavePanel *panel = [NSSavePanel savePanel];
+    [panel setTitle:title];
+    [panel setDirectoryURL:[NSURL fileURLWithPath:directory isDirectory:YES]];
+    [panel setNameFieldStringValue:defaultFilename];
+
+    if ([panel runModal] == NSModalResponseOK) {
+        NSString *filename = [[panel URL] path];
+        if (!filename) {
+            PyErr_SetString(PyExc_RuntimeError, "Failed to obtain filename");
+            return 0;
+        }
+        return PyUnicode_FromString([filename UTF8String]);
+    }
+
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
 
 static struct PyModuleDef moduledef = {
     .m_base = PyModuleDef_HEAD_INIT,
