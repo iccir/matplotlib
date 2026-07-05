@@ -1,5 +1,4 @@
 #import "MPLEventLoop.h"
-#import "MPLFigureManager.h"
 #import "MPLUtils.h"
 
 
@@ -16,7 +15,7 @@
     // Makes sure that [NSApp run] was called at least once for proper initialization
     BOOL _wasRunCalledAtLeastOnce;
 
-    // Internal state for dealing with -runUntilNoFigureManagers
+    // Block for use with -runUntilStopCondition: / -checkStopCondition
     BOOL (^_stopCondition)(void);
 }
 
