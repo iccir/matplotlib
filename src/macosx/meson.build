@@ -5,6 +5,7 @@ py3.extension_module(
   sources: files(
     '_macosx.m',
     'MPLAppDelegate.m',
+    'MPLEventLoop.m',
     'MPLFigureCanvas.m',
     'MPLFigureManager.m',
     'MPLNavigationToolbar2.m',

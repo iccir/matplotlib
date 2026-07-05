@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		5541D0C72FE5BED700831BD3 /* _macosx.m in Sources */ = {isa = PBXBuildFile; fileRef = 555111702FD9D518005F654C /* _macosx.m */; };
+		554BD2D42FF982E900F54D7F /* MPLEventLoop.h in Headers */ = {isa = PBXBuildFile; fileRef = 554BD2D22FF982E900F54D7F /* MPLEventLoop.h */; };
+		554BD2D52FF982E900F54D7F /* MPLEventLoop.m in Sources */ = {isa = PBXBuildFile; fileRef = 554BD2D32FF982E900F54D7F /* MPLEventLoop.m */; };
 		5551118B2FDB0E87005F654C /* MPLUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = 5551117F2FD9EE4A005F654C /* MPLUtils.m */; };
 		5551118C2FDB0E8A005F654C /* MPLAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 5551116B2FD9D467005F654C /* MPLAppDelegate.m */; };
 		5551118D2FDB0E8C005F654C /* MPLFigureCanvas.m in Sources */ = {isa = PBXBuildFile; fileRef = 5551116E2FD9D4BF005F654C /* MPLFigureCanvas.m */; };
@@ -19,6 +21,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		554BD2D22FF982E900F54D7F /* MPLEventLoop.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MPLEventLoop.h; sourceTree = "<group>"; };
+		554BD2D32FF982E900F54D7F /* MPLEventLoop.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MPLEventLoop.m; sourceTree = "<group>"; };
 		5551116A2FD9D467005F654C /* MPLAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MPLAppDelegate.h; sourceTree = "<group>"; };
 		5551116B2FD9D467005F654C /* MPLAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MPLAppDelegate.m; sourceTree = "<group>"; };
 		5551116D2FD9D4BF005F654C /* MPLFigureCanvas.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MPLFigureCanvas.h; sourceTree = "<group>"; };
@@ -75,6 +79,8 @@
 				5551117F2FD9EE4A005F654C /* MPLUtils.m */,
 				5551116A2FD9D467005F654C /* MPLAppDelegate.h */,
 				5551116B2FD9D467005F654C /* MPLAppDelegate.m */,
+				554BD2D22FF982E900F54D7F /* MPLEventLoop.h */,
+				554BD2D32FF982E900F54D7F /* MPLEventLoop.m */,
 				555111722FD9D7DB005F654C /* MPLFigureManager.h */,
 				555111732FD9D7DB005F654C /* MPLFigureManager.m */,
 				5551116D2FD9D4BF005F654C /* MPLFigureCanvas.h */,
@@ -113,6 +119,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				554BD2D42FF982E900F54D7F /* MPLEventLoop.h in Headers */,
 				558CF5A02FF2EA3D0077012B /* MPLSubplotTool.h in Headers */,
 				558CF5982FF1B0730077012B /* MPLNavigationToolbar2.h in Headers */,
 			);
@@ -181,6 +188,7 @@
 				558CF5A12FF2EA3D0077012B /* MPLSubplotTool.m in Sources */,
 				5551118D2FDB0E8C005F654C /* MPLFigureCanvas.m in Sources */,
 				558CF5992FF1B0730077012B /* MPLNavigationToolbar2.m in Sources */,
+				554BD2D52FF982E900F54D7F /* MPLEventLoop.m in Sources */,
 				5551118E2FDB0E8E005F654C /* MPLFigureManager.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
