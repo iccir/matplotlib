@@ -426,7 +426,7 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
         leak and set a RuntimeError message.
     */
     if (!provider) {
-        PyErr_SetString(PyExc_RuntimeError, "CGDataProviderCreateWithData() failed.");
+        PyErr_SetString(PyExc_RuntimeError, "CGDataProviderCreateWithData() failed");
         return;
     }
 

@@ -3,6 +3,7 @@
 #import "MPLUtils.h"
 
 @interface MPLSubplotTool () <NSWindowDelegate>
+
 @property (nonatomic) double left;
 @property (nonatomic) double bottom;
 @property (nonatomic) double right;
