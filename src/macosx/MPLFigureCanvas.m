@@ -71,9 +71,16 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
                                                            options: options
                                                              owner: self
                                                           userInfo: nil]];
+
+        MPLLog("[Lifecycle] MPLFigureCanvas<%p> init", self);
     }
 
     return self;
+}
+
+- (void) dealloc
+{
+    MPLLog("[Lifecycle] MPLFigureCanvas<%p> dealloc", self);
 }
 
 

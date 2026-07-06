@@ -32,6 +32,8 @@ static const CGFloat sButtonGap = 2;
         [self addSubview:_buttonContainer];
 
         [self _addMessageField];
+        
+        MPLLog("[Lifecycle] MPLNavigationToolbar2<%p> init", self);
     }
 
     return self;
@@ -45,6 +47,11 @@ static const CGFloat sButtonGap = 2;
 - (nullable instancetype) initWithCoder:(NSCoder *)coder
 {
     MPLUnavailable();
+}
+
+- (void) dealloc
+{
+    MPLLog("[Lifecycle] MPLNavigationToolbar2<%p> dealloc", self);
 }
 
 

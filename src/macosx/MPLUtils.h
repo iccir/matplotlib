@@ -2,11 +2,17 @@
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <Python.h>
+#import <OSLog/OSLog.h>
 
 // When a method or function is NS_UNAVAILABLE, call MPLUnavailable()
 // in the implementation to throw a runtime error.
 extern void _MPLUnavailable(const char *prettyFunction) __attribute__((__noreturn__));
 #define MPLUnavailable() _MPLUnavailable(__PRETTY_FUNCTION__)
+
+// Use the macOS unified logging system for debug logs. Logs are recorded
+// with almost no overhead unless a viewer is attached.
+extern os_log_t MPLGetLogger(void);
+#define MPLLog(format, ...) os_log_debug(MPLGetLogger(), format, ##__VA_ARGS__)
 
 // Acquire the GIL, call a method with the specified arguments,
 // discard the result, print any exception.

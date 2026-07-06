@@ -9,6 +9,18 @@ void _MPLUnavailable(const char *s)
     __builtin_unreachable();
 }
 
+extern os_log_t MPLGetLogger(void)
+{
+    static os_log_t sLogger = nil;
+
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        sLogger = os_log_create("org.matplotlib", "org.matplotlib");
+    });
+    
+    return sLogger;
+}
+
 
 #pragma mark - Python Utility Functions
 

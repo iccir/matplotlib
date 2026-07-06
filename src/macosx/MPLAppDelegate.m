@@ -18,9 +18,15 @@
 {
     if ((self = [super init])) {
         _imageDictionary = imageDictionary;
+        MPLLog("[Lifecycle] MPLAppDelegate<%p> init", self);
     }
     
     return self;
+}
+
+- (void) dealloc
+{
+    MPLLog("[Lifecycle] MPLAppDelegate<%p> dealloc", self);
 }
 
 

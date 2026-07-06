@@ -59,6 +59,7 @@ static void errSetException(NSException *exception) {
 static void
 handleSigint(int signal)
 {
+    MPLLog("[EventLoop] received SIGINT");
     [[MPLEventLoop sharedInstance] stop];
 }
 
@@ -81,7 +82,7 @@ wait_for_stdin(void)
     // Set up a SIGINT handler to interrupt the event loop if ctrl+c comes in too
     originalSigintAction = PyOS_setsig(SIGINT, handleSigint);
 
-    [[MPLEventLoop sharedInstance] spinUntilStandardInputActivity];
+    [[MPLEventLoop sharedInstance] spinUntilStandardInput];
 
     // Restore the original SIGINT handler upon exiting the function
     PyOS_setsig(SIGINT, originalSigintAction);

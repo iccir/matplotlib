@@ -79,9 +79,15 @@
 
     if (self = [super initWithWindow:window]) {
         [self _buildUI];
+        MPLLog("[Lifecycle] MPLSubplotTool<%p> init", self);
     }
 
     return self;
+}
+
+- (void) dealloc
+{
+    MPLLog("[Lifecycle] MPLSubplotTool<%p> dealloc", self);
 }
 
 

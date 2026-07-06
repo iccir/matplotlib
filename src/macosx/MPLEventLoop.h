@@ -9,7 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype) sharedInstance;
 
 // Calls to -spin... may be nested.
-- (void) spinUntilStandardInputActivity;
+- (void) spinUntilStandardInput;
 - (void) spinUntilNoEvents;
 
 // Calls to -run... may not be nested. Will call -[NSApp run]

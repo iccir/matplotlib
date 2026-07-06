@@ -65,6 +65,7 @@
     if ((self = [super initWithWindow:window])) {
         [figureCanvas setManager:self];
         _figureCanvas = figureCanvas;
+        MPLLog("[Lifecycle] MPLFigureManager<%p> init", self);
     }
 
     return self;
@@ -78,6 +79,11 @@
 - (nullable instancetype) initWithCoder:(NSCoder *)coder
 {
     MPLUnavailable();
+}
+
+- (void) dealloc
+{
+    MPLLog("[Lifecycle] MPLFigureManager<%p> dealloc", self);
 }
 
 
