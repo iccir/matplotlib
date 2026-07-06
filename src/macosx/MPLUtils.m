@@ -26,6 +26,11 @@ extern os_log_t MPLGetLogger(void)
 
 void MPLCallMethod(PyObject *pyObject, const char *name, char const *format, ...)
 {
+    // It is possible for Obj-C objects to momentarily outlive their paired Python
+    // counterparts, especially when dealing with AppKit objects. Hence, allow
+    // messaging a NULL pyObject to be a no-op.
+    if (!pyObject) return;
+
     PyGILState_STATE gilState = PyGILState_Ensure();
 
     PyObject *result = NULL;
