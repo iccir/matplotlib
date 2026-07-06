@@ -112,7 +112,8 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
 
 - (void) displayLayer:(CALayer *)layer
 {
-    MPLCallMethod(_pyObject, "_handle_display_layer", "p", _needsDrawOnNextDisplayLayer);
+    int needsDraw = _needsDrawOnNextDisplayLayer ? 1 : 0;
+    MPLCallMethod(_pyObject, "_handle_display_layer", "i", needsDraw);
 }
 
 - (nullable id<CAAction>) actionForLayer:(CALayer *)layer forKey:(NSString *)event
