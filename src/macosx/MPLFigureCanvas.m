@@ -2,15 +2,6 @@
 #import "MPLUtils.h"
 
 
-static void sReleasePyBuffer(void *info, const void *data, size_t size)
-{
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyBuffer_Release((Py_buffer *)info);
-    free(info);
-    PyGILState_Release(gstate);
-}
-
-
 @interface MPLRubberbandView : NSView
 @end
 
@@ -405,36 +396,15 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
 
 #pragma mark - Public Methods
 
-- (void) updateLayerContentsWithBuffer:(PyObject *)pyObject
+- (void) updateLayerContentsWithBuffer: (NSData *) buffer
+                           deviceWidth: (size_t) deviceWidth
+                          deviceHeight: (size_t) deviceHeight;
 {
-    Py_buffer *buffer = malloc(sizeof(Py_buffer));
+    CFDataRef cfBuffer = (__bridge CFDataRef)buffer;
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData(cfBuffer);
 
-    if (PyObject_GetBuffer(pyObject, buffer, PyBUF_CONTIG_RO) == -1) {
-        free(buffer);
-        PyErr_Print();
-        return;
-    }
-
-    if (!buffer->buf || buffer->len <= 0 || buffer->ndim != 3 || buffer->shape[2] != 4) {
-        sReleasePyBuffer(buffer, NULL, 0);
-        return;
-    }
-
-    const Py_ssize_t pixelsHigh = buffer->shape[0];
-    const Py_ssize_t pixelsWide = buffer->shape[1];
-
-    CGDataProviderRef provider = CGDataProviderCreateWithData(
-        buffer, buffer->buf, buffer->len, sReleasePyBuffer
-    );
-
-    /*
-        In the unlikely case that CGDataProviderCreateWithData() fails,
-        we do not know if 'releaseData' was called. We have to choose between
-        a potential large leak or a potential double-free. Choose the potential
-        leak and set a RuntimeError message.
-    */
     if (!provider) {
-        PyErr_SetString(PyExc_RuntimeError, "CGDataProviderCreateWithData() failed");
+        PyErr_SetString(PyExc_RuntimeError, "CGDataProviderCreateWithCFData() failed");
         return;
     }
 
@@ -442,7 +412,7 @@ static void sReleasePyBuffer(void *info, const void *data, size_t size)
     CGBitmapInfo bitmapInfo = 0 | kCGBitmapByteOrderDefault | kCGImageAlphaLast;
 
     CGImageRef contents = colorSpace ? CGImageCreate(
-        pixelsWide, pixelsHigh, 8, 32, pixelsWide * 4,
+        deviceWidth, deviceHeight, 8, 32, deviceWidth * 4,
         colorSpace, bitmapInfo, provider, NULL, false,
         kCGRenderingIntentDefault
     ) : NULL;

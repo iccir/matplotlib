@@ -106,6 +106,7 @@
 
     MPLLog("[EventLoop] +++ loop #%ld entry +++ spinUntilStandardInput", (long)_loopCount);
 
+    while (!inputDidOccur) {
         @autoreleasepool {
             NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
                                                 untilDate: [NSDate distantFuture]

@@ -4,48 +4,103 @@
 #import <Python.h>
 #import <OSLog/OSLog.h>
 
-// When a method or function is NS_UNAVAILABLE, call MPLUnavailable()
-// in the implementation to throw a runtime error.
-extern void _MPLUnavailable(const char *prettyFunction) __attribute__((__noreturn__));
+NS_ASSUME_NONNULL_BEGIN
+
+/*
+    When a method or function is NS_UNAVAILABLE, call MPLUnavailable()
+    in the implementation to throw a runtime error.
+*/
+extern void
+_MPLUnavailable(const char *prettyFunction) __attribute__((__noreturn__));
 #define MPLUnavailable() _MPLUnavailable(__PRETTY_FUNCTION__)
 
-// Use the macOS unified logging system for debug logs. Logs are recorded
-// with almost no overhead unless a viewer is attached.
-extern os_log_t MPLGetLogger(void);
+/*
+    Use the macOS unified logging system for debug logs. Logs are recorded
+    with almost no overhead unless a viewer is attached.
+*/
+extern os_log_t
+MPLGetLogger(void);
+
 #define MPLLog(format, ...) os_log_debug(MPLGetLogger(), format, ##__VA_ARGS__)
 
-// Acquire the GIL, call a method with the specified arguments,
-// discard the result, print any exception.
-extern void MPLCallMethod(PyObject *pyObject, const char *name, char const *format, ...);
+/*
+    Acquire the GIL, call a method with the specified arguments,
+    discard the result, print any exception.
+*/
+extern void
+MPLCallMethod(PyObject * _Nullable pyObject, const char *name,
+              char const * _Nullable format, ...);
 
-// Converts the passed Python str to an NSString
-extern NSString *MPLGetStringWithPyString(PyObject *string);
+/*
+    Converts a Python str into an NSString.
+    Returns nil and raises a Python exception if the str could not be converted.
+*/
+extern NSString * _Nullable
+MPLGetStringWithPyString(PyObject * _Nullable string);
 
-// Input: a Python sequence of str objects.
-// Output: An NSArray of NSString objects.
-// Returns nil if 'sequence' is not a sequence or contained any non-str object
-extern NSArray<NSString *> *MPLGetStringArrayWithPySequence(PyObject *pySequence);
+/*
+    Converts a Python sequence of exactly one str object into an NSString.
+    Returns nil and raises a Python exception if the sequence is not exactly one
+    string or if the string could not be converted into an NSString.
+*/
+extern NSString * _Nullable
+MPLGetStringWithPySequence(PyObject * _Nullable pySequence);
 
-// Input: a Python sequence of exactly one str object.
-// Output: An NSString or nil
-extern NSString *MPLGetStringWithPySequence(PyObject *pySequence);
+/*
+    Converts a Python sequence of str objects into an NSArray of NSString objects.
+    Returns nil and raises a Python exception if 'sequence' is not a sequence,
+    any item is not a string, or any item could not be converted into an NSString.
+*/
+extern NSArray<NSString *> * _Nullable
+MPLGetStringArrayWithPySequence(PyObject * _Nullable pySequence);
 
-// Input: a Python dict of str keys and values.
-// Output: An NSDictionary of NSString keys and values.
-// Returns nil if 'dict' is not a dict or any key/value was not a str.
-extern NSDictionary<NSString *, NSString *> *MPLGetStringDictionaryWithPyDict(PyObject *dict);
+/*
+    Converts a Python dict to an NSDictionary, keys/values must be strings.
+    Returns nil and raises a Python exception if 'dict' is not a dict, any
+    key/value was not a str, or any str could not be converted into an NSString.
+*/
+extern NSDictionary<NSString *, NSString *> * _Nullable
+MPLGetStringDictionaryWithPyDict(PyObject * _Nullable dict);
 
-// Returns a rectangle of size 'size' centered in 'bounds'.
-// For example: { 60, 40 } centered in { 20, 20, 80, 80 } is { 30, 40, 60, 40 }
-extern CGRect MPLGetCenteredRect(CGRect bounds, CGSize size);
+/*
+    Calls getbuffer() on a Python object and returns the buffer as an NSData.
+    If expectedDimensions is non-0, verifies against ndim and fills outShape
+    Returns nil and raises a Python exception if any of the following occur:
+    1) getbuffer() call fails
+    2) buffer->buf is NULL
+    3) buffer->len is <= 0
+    4) expectedDimensions is non-0 and not equal to buffer->ndim
+*/
+extern NSData * _Nullable
+MPLGetBufferWithPyObject(PyObject * _Nullable pyObject, size_t expectedDimensions,
+                         ssize_t * _Nullable outShape);
 
-// Returns an NSColor in the sRGB color space.
-// For example: 'MPLGetRGBColor(0xFF0000, 1.0)' is opaque red.
-extern NSColor *MPLGetRGBColor(int rgb, CGFloat alpha);
+/*
+    Returns a rectangle of size 'size' centered in 'bounds'.
+    For example: { 60, 40 } centered in { 20, 20, 80, 80 } is { 30, 40, 60, 40 }
+*/
+extern CGRect
+MPLGetCenteredRect(CGRect bounds, CGSize size);
 
-// Create a a sRGB+alpha image of the specified width, height, and scale factor.
-// (0, 0) corresponds to the upper-left corner.
-extern CGImageRef MPLCreateImage(CGSize size, CGFloat scale, void (^callback)(CGContextRef));
+/*
+    Returns an NSColor in the sRGB color space.
+    For example: 'MPLGetRGBColor(0xFF0000, 1.0)' is opaque red.
+*/
+extern NSColor *
+MPLGetRGBColor(int rgb, CGFloat alpha);
 
-// Copy a grayscale non-alpha version of inImage to use with CGContextClipToMask()
-extern CGImageRef MPLCopyGrayscaleNonAlphaImage(CGImageRef inImage);
+/*
+    Create a sRGB+alpha image of the specified width, height, and scale factor.
+    (0, 0) corresponds to the upper-left corner.
+*/
+extern CGImageRef _Nullable
+MPLCreateImage(CGSize size, CGFloat scale, void (^callback)(CGContextRef));
+
+/*
+    Copy a grayscale non-alpha version of inImage to use with CGContextClipToMask()
+*/
+extern CGImageRef _Nullable
+MPLCopyGrayscaleNonAlphaImage(CGImageRef inImage);
+
+
+NS_ASSUME_NONNULL_END

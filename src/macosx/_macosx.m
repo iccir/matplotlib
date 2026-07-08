@@ -165,9 +165,22 @@ static PyObject *
 FigureCanvas_update_layer_contents(FigureCanvas *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    PyObject *buffer;
-    if (!PyArg_ParseTuple(args, "O", &buffer)) { return NULL; }
-    [self->object updateLayerContentsWithBuffer:buffer];
+    PyObject *bufferPyObject;
+    if (!PyArg_ParseTuple(args, "O", &bufferPyObject)) { return NULL; }
+
+    ssize_t shape[3];
+    NSData *buffer = MPLGetBufferWithPyObject(bufferPyObject, 3, shape);
+    if (!buffer) { return NULL; }
+
+    if (shape[0] <= 0 || shape[1] <= 0 || shape[2] != 4) {
+        PyErr_SetString(PyExc_RuntimeError, "Unexpected buffer shape");
+        return NULL;
+    }
+
+    [self->object updateLayerContentsWithBuffer: buffer
+                                    deviceWidth: (size_t)shape[1]
+                                   deviceHeight: (size_t)shape[0]];
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE;
 }
