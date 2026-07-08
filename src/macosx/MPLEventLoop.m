@@ -175,11 +175,6 @@ typedef NS_ENUM(NSInteger, LoopType) {
 
 - (void) runUntilTimeout:(double)timeout
 {
-    if ([NSApp isRunning]) {
-        PyErr_SetString(PyExc_RuntimeError, "An event loop is already running");
-        return;
-    }
-    
     if (timeout > 0.0) {
         [self performSelector:@selector(stop) withObject:nil afterDelay:timeout];
     }
@@ -193,11 +188,6 @@ typedef NS_ENUM(NSInteger, LoopType) {
 
 - (void) runUntilStopCondition:(BOOL (^)(void))stopCondition
 {
-    if ([NSApp isRunning]) {
-        PyErr_SetString(PyExc_RuntimeError, "An event loop is already running");
-        return;
-    }
-
     _stopCondition = stopCondition;
 
     [self _wrapLoopWithType:LoopTypeRun label:@"runUntilStopCondition" callback:^{

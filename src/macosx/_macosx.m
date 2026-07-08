@@ -257,6 +257,11 @@ FigureCanvas__start_event_loop(FigureCanvas *self, PyObject *args, PyObject *key
         return NULL;
     }
 
+    if ([NSApp isRunning]) {
+        PyErr_SetString(PyExc_RuntimeError, "An event loop is already running");
+        return NULL;
+    }
+
     Py_BEGIN_ALLOW_THREADS
     [[MPLEventLoop sharedInstance] runUntilTimeout:timeout];
     Py_END_ALLOW_THREADS
@@ -1030,6 +1035,11 @@ show(PyObject *self)
         for (NSWindow *window in [NSApp windows]) {
             [window orderFront:nil];
         }
+    }
+
+    if ([NSApp isRunning]) {
+        PyErr_SetString(PyExc_RuntimeError, "An event loop is already running");
+        return NULL;
     }
 
     Py_BEGIN_ALLOW_THREADS
