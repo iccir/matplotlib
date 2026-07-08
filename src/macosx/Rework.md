@@ -10,6 +10,7 @@
 #### Issues fixed in "arc" branch:
 
 - [21788: Apparent memory issue?](https://github.com/matplotlib/matplotlib/issues/21788)
+- [27147: Embedded Python uncatchable hard exit on closing last matplotlib window](https://github.com/matplotlib/matplotlib/issues/27147)
 - [29076: Calling start() multiple times on a macos timer doesn't stop the previous timer
 ](https://github.com/matplotlib/matplotlib/issues/29076)
 - [31797: Re-enable Automatic Reference Counting (ARC) for macOS backend.
