@@ -68,17 +68,6 @@ wait_for_stdin(void)
 {
     BEGIN_OBJC_ENTRY
 
-    // Short circuit if no windows are active
-    // Rely on Python's input handling to manage CPU usage
-    // This queries the NSApp, rather than using our FigureWindowCount because that is decremented when events still
-    // need to be processed to properly close the windows.
-    @autoreleasepool {
-        if (![[NSApp windows] count]) {
-            [[MPLEventLoop sharedInstance] spinUntilNoEvents];
-            return 1;
-        }
-    }
-
     // Set up a SIGINT handler to interrupt the event loop if ctrl+c comes in too
     originalSigintAction = PyOS_setsig(SIGINT, handleSigint);
 
@@ -1073,7 +1062,12 @@ choose_save_file(PyObject *unused, PyObject *args)
     [panel setDirectoryURL:[NSURL fileURLWithPath:directory isDirectory:YES]];
     [panel setNameFieldStringValue:defaultFilename];
 
-    if ([panel runModal] == NSModalResponseOK) {
+    __block NSModalResponse modalResponse;
+    [[MPLEventLoop sharedInstance] wrapModalLoopWithLabel:@"choose_save_file" callback:^{
+        modalResponse = [panel runModal];
+    }];
+
+    if (modalResponse == NSModalResponseOK) {
         NSString *filename = [[panel URL] path];
         if (!filename) {
             PyErr_SetString(PyExc_RuntimeError, "Failed to obtain filename");

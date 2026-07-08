@@ -1,8 +1,17 @@
 #import "MPLEventLoop.h"
 #import "MPLUtils.h"
 
+typedef NS_ENUM(NSInteger, LoopType) {
+    LoopTypeNone,
+    LoopTypeRun,
+    LoopTypeSpin,
+    LoopTypeModal
+};
+
 
 @implementation MPLEventLoop {
+    LoopType _currentLoopType;
+
     // Keeps track of all active loops (both -spin... and -run...)
     // Needed so we can post enough events to cancel all loops
     NSInteger _loopCount;
@@ -64,18 +73,47 @@
     // +[NSEvent otherEventWithType:...] is declared nullable but will not return
     // nil for these constant, valid arguments; guard defensively anyway.
     if (event) {
-        [NSApp postEvent: event atStart: YES];
+        [NSApp postEvent:event atStart:YES];
     }
 }
 
-- (void) _ensureRunWasCalledAtLeastOnce
+- (void) _runForOneCycle
 {
-    if (!_wasRunCalledAtLeastOnce) {
-        MPLLog("[EventLoop] Calling run for one cycle to perform initialization");
+    __weak id weakSelf = self;
 
-        dispatch_async(dispatch_get_main_queue(), ^{ [NSApp stop:self]; });
-        [NSApp run];
-        _wasRunCalledAtLeastOnce = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSApp stop:self];
+        [weakSelf _postInternalEvent];
+    });
+
+    [NSApp run];
+}
+
+- (void) _wrapLoopWithType:(LoopType)loopType label:(NSString *)label callback:(void (^)(void))callback
+{
+    if (loopType == LoopTypeSpin && !_wasRunCalledAtLeastOnce) {
+        MPLLog("[EventLoop] Calling -[NSApplication run] for one cycle to perform initialization");
+        [self _runForOneCycle];
+    }
+    _wasRunCalledAtLeastOnce = YES;
+
+    LoopType previousLoopType = _currentLoopType;
+    _currentLoopType = loopType;
+    _loopCount++;
+    
+    MPLLog("[EventLoop] +++ loop #%ld entry +++ %@", (long)_loopCount, label);
+    callback();
+    MPLLog("[EventLoop] --- loop #%ld exit  --- %@", (long)_loopCount, label);
+    
+    _loopCount--;
+    _currentLoopType = previousLoopType;
+    
+    if (_shouldStop) {
+        if (_loopCount > 0) {
+            [self stop];
+        } else {
+            _shouldStop = NO;
+        }
     }
 }
 
@@ -84,8 +122,6 @@
 
 - (void) spinUntilStandardInput
 {
-    [self _ensureRunWasCalledAtLeastOnce];
-
     __block int inputDidOccur = 0;
     __weak id weakSelf = self;
 
@@ -102,52 +138,39 @@
 
     dispatch_resume(source);
 
-    _loopCount++;
+    [self _wrapLoopWithType:LoopTypeSpin label:@"spinUntilStandardInput" callback:^{
+        // We purposely do not check _shouldStop here. In the event of a Control-C,
+        // we can't return to Python until inputDidOccur is YES, else we will hang
+        // while Python waits in my_fgets().
+        while (!inputDidOccur) {
+            @autoreleasepool {
+                NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                                    untilDate: [NSDate distantFuture]
+                                                       inMode: NSDefaultRunLoopMode
+                                                      dequeue: YES];
 
-    MPLLog("[EventLoop] +++ loop #%ld entry +++ spinUntilStandardInput", (long)_loopCount);
-
-    while (!inputDidOccur) {
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                                untilDate: [NSDate distantFuture]
-                                                   inMode: NSDefaultRunLoopMode
-                                                  dequeue: YES];
-
-            [NSApp sendEvent:event];
+                [NSApp sendEvent:event];
+            }
         }
-    }
-
-    MPLLog("[EventLoop] --- loop #%ld exit  --- spinUntilStandardInput", (long)_loopCount);
-
-    _loopCount--;
-    if (_loopCount == 0) _shouldStop = NO;
+    }];
 }
 
 - (void) spinUntilNoEvents
 {
-    [self _ensureRunWasCalledAtLeastOnce];
+    [self _wrapLoopWithType:LoopTypeSpin label:@"spinUntilNoEvents" callback:^{
+        while (!self->_shouldStop) {
+            @autoreleasepool {
+                NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                                    untilDate: [NSDate distantPast]
+                                                       inMode: NSDefaultRunLoopMode
+                                                      dequeue: YES];
 
-    _loopCount++;
+                if (!event) break;
 
-    MPLLog("[EventLoop] +++ loop #%ld entry +++ spinUntilNoEvents", (long)_loopCount);
-
-    while (!_shouldStop) {
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                                untilDate: [NSDate distantPast]
-                                                   inMode: NSDefaultRunLoopMode
-                                                  dequeue: YES];
-
-            if (!event) break;
-
-            [NSApp sendEvent:event];
+                [NSApp sendEvent:event];
+            }
         }
-    }
-
-    MPLLog("[EventLoop] --- loop #%ld exit  --- spinUntilNoEvents", (long)_loopCount);
-
-    _loopCount--;
-    if (_loopCount == 0) _shouldStop = NO;
+    }];
 }
 
 - (void) runUntilTimeout:(double)timeout
@@ -157,21 +180,15 @@
         return;
     }
     
-    _loopCount++;
-
     if (timeout > 0.0) {
         [self performSelector:@selector(stop) withObject:nil afterDelay:timeout];
     }
 
-    MPLLog("[EventLoop] +++ loop #%ld entry +++ runUntilTimeout:", (long)_loopCount);
-    _wasRunCalledAtLeastOnce = YES;
-    [NSApp run];
-    MPLLog("[EventLoop] --- loop #%ld exit  --- runUntilTimeout:", (long)_loopCount);
+    [self _wrapLoopWithType:LoopTypeRun label:@"runUntilTimeout" callback:^{
+        [NSApp run];
+    }];
 
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(stop) object:nil];
-    
-    _loopCount--;
-    if (!_loopCount) _shouldStop = NO;
 }
 
 - (void) runUntilStopCondition:(BOOL (^)(void))stopCondition
@@ -181,19 +198,13 @@
         return;
     }
 
-    _loopCount++;
-
     _stopCondition = stopCondition;
 
-    MPLLog("[EventLoop] +++ loop #%ld entry +++ runUntilStopCondition:", (long)_loopCount);
-    _wasRunCalledAtLeastOnce = YES;
-    [NSApp run];
-    MPLLog("[EventLoop] --- loop #%ld exit  --- runUntilStopCondition:", (long)_loopCount);
+    [self _wrapLoopWithType:LoopTypeRun label:@"runUntilStopCondition" callback:^{
+        [NSApp run];
+    }];
 
     _stopCondition = nil;
-
-    _loopCount--;
-    if (!_loopCount) _shouldStop = NO;
 }
 
 - (void) checkStopCondition
@@ -205,18 +216,23 @@
 
 - (void) stop
 {
-    _shouldStop = YES;
-
     MPLLog("[EventLoop] stop requested, _loopCount = %ld", (long)_loopCount);
 
-    [NSApp stop:self];
+    _shouldStop = YES;
     
-    // Post X events, where X is the number of active loops
-    for (NSInteger i = 0; i < _loopCount; i++) {
-        [self _postInternalEvent];
+    if (_currentLoopType == LoopTypeRun) {
+        [NSApp stop:self];
+    } else if (_currentLoopType == LoopTypeModal) {
+        [NSApp stopModal];
     }
+
+    [self _postInternalEvent];
 }
 
+- (void) wrapModalLoopWithLabel:(NSString *)label callback:(void (^)(void))callback
+{
+    [self _wrapLoopWithType:LoopTypeModal label:label callback:callback];
+}
 
 @end
 

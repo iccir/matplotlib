@@ -21,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 // Stops all active loops (both -spin... and -run...)
 - (void) stop;
 
+- (void) wrapModalLoopWithLabel:(NSString *)label callback:(void (^)(void))callback;
+
 @end
 
 NS_ASSUME_NONNULL_END
