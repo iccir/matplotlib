@@ -47,7 +47,7 @@ static id<NSApplicationDelegate> appDelegate = nil;
 
 /* Variables to keep track of state and window count for show() */
 static BOOL IsRunningFromShow = NO;
-static long FigureWindowCount = 0;
+static NSHashTable<NSWindow *> *FigureWindowHashTable = nil;
 
 // Global variable to store the original SIGINT handler
 static PyOS_sighandler_t originalSigintAction = NULL;
@@ -105,7 +105,7 @@ static int wait_for_stdin(void) {
 
     // Short circuit if no windows are active
     // Rely on Python's input handling to manage CPU usage
-    // This queries the NSApp, rather than using our FigureWindowCount because that is decremented when events still
+    // This queries the NSApp, rather than using our FigureWindowHashTable because that is modified when events still
     // need to be processed to properly close the windows.
     @autoreleasepool {
         if (![[NSApp windows] count]) {
@@ -566,7 +566,11 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
 
     self->object = window;
     [self->object setPyObject:(PyObject *)self];
-    ++FigureWindowCount;
+
+    if (!FigureWindowHashTable) {
+        FigureWindowHashTable = [NSHashTable weakObjectsHashTable];
+    }
+    [FigureWindowHashTable addObject:window];
 
     END_OBJC_ENTRY
     return 0;
@@ -616,9 +620,10 @@ FigureManager__closeAndClearWindow(FigureManager *self)
         [self->object close];
         [self->object setDelegate:nil];
         [self->object setPyObject:NULL];
+        [FigureWindowHashTable removeObject:self->object];
         self->object = nil;
 
-        if (--FigureWindowCount == 0 && IsRunningFromShow) {
+        if ([FigureWindowHashTable count] == 0 && IsRunningFromShow) {
             [NSApp stop:nil];
         }
     }
@@ -1077,10 +1082,8 @@ show(PyObject *self)
     // autorelease pool, wrap in @autoreleasepool as -[NSApp run] is long-running.
     @autoreleasepool {
         [NSApp activateIgnoringOtherApps: YES];
-        NSArray *windowsArray = [NSApp windows];
-        NSEnumerator *enumerator = [windowsArray objectEnumerator];
-        NSWindow *window;
-        while ((window = [enumerator nextObject])) {
+
+        for (NSWindow *window in [FigureWindowHashTable allObjects]) {
             [window orderFront:nil];
         }
     }
