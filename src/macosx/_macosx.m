@@ -45,7 +45,7 @@
 static id<NSApplicationDelegate> appDelegate = nil;
 
 /* Variables to keep track of state and window count for show() */
-static long FigureWindowCount = 0;
+static NSHashTable<MPLFigureManager *> *FigureManagerHashTable = nil;
 
 // Global variable to store the original SIGINT handler
 static PyOS_sighandler_t originalSigintAction = NULL;
@@ -371,7 +371,11 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
 
     self->object = [[MPLFigureManager alloc] initWithFigureCanvas:figureCanvas];
     [self->object setPyObject:(PyObject *)self];
-    ++FigureWindowCount;
+    
+    if (!FigureManagerHashTable) {
+        FigureManagerHashTable = [NSHashTable weakObjectsHashTable];
+    }
+    [FigureManagerHashTable addObject:self->object];
 
     END_OBJC_ENTRY
     return 0;
@@ -406,11 +410,12 @@ static void
 FigureManager__close_and_clear_window_impl(FigureManager *self)
 {
     if (self->object) {
+        [FigureManagerHashTable removeObject:self->object];
+
         [self->object close];
         [self->object setPyObject:NULL];
         self->object = nil;
-
-        --FigureWindowCount;
+        
         [[MPLEventLoop sharedInstance] checkStopCondition];
     }
 }
@@ -1028,12 +1033,12 @@ show(PyObject *self)
 {
     BEGIN_OBJC_ENTRY
 
-    // Iterating over -[NSApp windows] will add the windows to the topmost
+    // Iterating over FigureManagerHashTable will add the managers to the topmost
     // autorelease pool, wrap in @autoreleasepool as -[NSApp run] is long-running.
     @autoreleasepool {
         [NSApp activateIgnoringOtherApps: YES];
-        for (NSWindow *window in [NSApp windows]) {
-            [window orderFront:nil];
+        for (MPLFigureManager *manager in [FigureManagerHashTable allObjects]) {
+            [manager raise];
         }
     }
 
@@ -1044,7 +1049,7 @@ show(PyObject *self)
 
     Py_BEGIN_ALLOW_THREADS
     [[MPLEventLoop sharedInstance] runUntilStopCondition:^{
-        return (BOOL)(FigureWindowCount == 0);
+        return (BOOL)([FigureManagerHashTable count] == 0);
     }];
     Py_END_ALLOW_THREADS
 
