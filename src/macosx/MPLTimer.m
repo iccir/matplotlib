@@ -11,7 +11,7 @@
     
     To implement thread-safety, we do the following:
     
-    1) Most ivars are only modified on the main thread.
+    1) Properties and ivars (except _storage) are only modified on the main thread.
 
     2) We store our PyObject inside a special MPLTimerStorage class that also
        acts as a mutex via the @synchronized directive.
@@ -23,10 +23,10 @@
     3) When calling the "on_timer" callback:
        - Acquire the GIL.
        - Acquire the _storage mutex.
-       - Extract a +1 reference to the guarded pyObject.
+       - Extract the pyObject and increment the reference count.
        - Release the _storage mutex.
        - Call "_on_timer" on the pyObject.
-       - Decrement the reference.
+       - Decrement the pyObject reference count.
        - Release the GIL.
 */
 
@@ -151,6 +151,7 @@
 {
     if ([NSThread isMainThread]) {
         [self _restartTimer];
+
     } else {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self start];
@@ -162,9 +163,10 @@
 {
     if ([NSThread isMainThread]) {
         [self _cancelAndClearSource];
+
     } else {
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self _cancelAndClearSource];
+            [self stop];
         });
     }
 }
