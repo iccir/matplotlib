@@ -10,9 +10,11 @@ py3.extension_module(
     'MPLFigureManager.m',
     'MPLNavigationToolbar2.m',
     'MPLSubplotTool.m',
+    'MPLTimer.m',
     'MPLUtils.m',
   ),
   dependencies: dependency('appleframeworks', modules: 'Cocoa'),
+  # Note: '-Os' is the Apple-suggested optimization level for shipping code
   override_options: ['werror=true','optimization=s'],
   objc_args: [
     # Enable Objective-C ARC

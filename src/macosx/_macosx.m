@@ -9,6 +9,7 @@
 #import "MPLFigureManager.h"
 #import "MPLNavigationToolbar2.h"
 #import "MPLSubplotTool.h"
+#import "MPLTimer.h"
 
 #if !__has_feature(objc_arc_fields)
 #error "The macOS backend requires ARC C struct fields support (objc_arc_fields)."
@@ -709,8 +710,7 @@ static PyTypeObject NavigationToolbar2Type = {
 
 typedef struct {
     PyObject_HEAD
-    __strong NSTimer *timer;
-    BOOL shouldInvalidate;
+    __strong MPLTimer *object;
 } Timer;
 
 static PyObject *
@@ -719,69 +719,39 @@ Timer_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)((Timer*)type->tp_alloc(type, 0));
 }
 
-static PyObject *
-Timer_repr(Timer *self)
+static int
+Timer_init(Timer *self, PyObject *args, PyObject *kwds)
 {
-    return PyUnicode_FromFormat("Timer<%p> wrapping NSTimer<%p>",
-                                (void *)self, (__bridge void *)self->timer);
+    BEGIN_OBJC_ENTRY
+    self->object = [[MPLTimer alloc] init];
+    [self->object setPyObject:(PyObject *)self];
+    END_OBJC_ENTRY
+    return 0;
 }
 
 static void
-Timer__timer_stop_impl(Timer *self)
+Timer_dealloc(Timer *self)
 {
-    if (self->shouldInvalidate) {
-        [self->timer invalidate];
-        self->shouldInvalidate = NO;
-    }
-    self->timer = nil;
+    BEGIN_OBJC_ENTRY
+    [self->object stop];
+    [self->object setPyObject:NULL];
+    self->object = nil;
+    END_OBJC_ENTRY
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 static PyObject *
-Timer__timer_start(Timer *self, PyObject *args)
+Timer_repr(Timer *self)
+{
+    return PyUnicode_FromFormat("Timer<%p> wrapping MPLTimer<%p>",
+                                (void *)self, (__bridge void *)self->object);
+}
+
+static PyObject *
+Timer__timer_start(Timer *self)
 {
     BEGIN_OBJC_ENTRY
-    NSTimer *timer;
-    NSTimeInterval interval;
-    PyObject *py_interval = NULL, *py_single = NULL, *py_on_timer = NULL;
-    int single;
-    if (!(py_interval = PyObject_GetAttrString((PyObject *)self, "_interval"))
-        || ((void)((interval = PyFloat_AsDouble(py_interval) / 1000.)), PyErr_Occurred())
-        || !(py_single = PyObject_GetAttrString((PyObject *)self, "_single"))
-        || ((single = PyObject_IsTrue(py_single)) == -1)
-        || !(py_on_timer = PyObject_GetAttrString((PyObject *)self, "_on_timer"))) {
-        goto exit;
-    }
-    if (!PyMethod_Check(py_on_timer)) {
-        PyErr_SetString(PyExc_RuntimeError, "_on_timer should be a Python method");
-        goto exit;
-    }
-
-    // Stop any previous timers if start() was called multiple times
-    Timer__timer_stop_impl(self);
-
-    // hold a reference to the timer so we can invalidate/stop it later
-    timer = [NSTimer timerWithTimeInterval: interval
-                                   repeats: !single
-                                     block: ^(NSTimer *timer) {
-        MPLCallMethod((PyObject *)self, "_on_timer", "");
-        if (single) {
-            // A single-shot timer will be automatically invalidated when it fires, so
-            // we shouldn't do it ourselves when the object is deleted.
-            self->shouldInvalidate = NO;
-        }
-    }];
-
-    // Schedule the timer on the main run loop which is needed
-    // when updating the UI from a background thread
-    [[NSRunLoop mainRunLoop] addTimer: timer forMode: NSRunLoopCommonModes];
-
-    self->timer = timer;
-    self->shouldInvalidate = YES;
-
-exit:
-    Py_XDECREF(py_interval);
-    Py_XDECREF(py_single);
-    Py_XDECREF(py_on_timer);
+    [self->object start];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -790,18 +760,41 @@ static PyObject *
 Timer__timer_stop(Timer *self)
 {
     BEGIN_OBJC_ENTRY
-    Timer__timer_stop_impl(self);
+    [self->object stop];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
 
-static void
-Timer_dealloc(Timer *self)
+static PyObject *
+Timer__update_interval(Timer *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    Timer__timer_stop_impl(self);
+
+    int intervalInMsecs;
+    if (!PyArg_ParseTuple(args, "i", &intervalInMsecs)) {
+        return NULL;
+    }
+    
+    [self->object updateIntervalInMsecs:intervalInMsecs];
+
     END_OBJC_ENTRY
-    Py_TYPE(self)->tp_free((PyObject *)self);
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+Timer__update_single_shot(Timer *self, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+
+    int singleShot;
+    if (!PyArg_ParseTuple(args, "p", &singleShot)) {
+        return NULL;
+    }
+    
+    [self->object updateSingleShot:(singleShot > 0) ? YES : NO];
+
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
 }
 
 static PyTypeObject TimerType = {
@@ -813,16 +806,23 @@ static PyTypeObject TimerType = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 
     .tp_new = (newfunc)Timer_new,
+    .tp_init = (initproc)Timer_init,
     .tp_dealloc = (destructor)Timer_dealloc,
     .tp_repr = (reprfunc)Timer_repr,
 
     .tp_methods = (PyMethodDef[]){  // All docstrings are inherited.
         {"_timer_start",
          (PyCFunction)Timer__timer_start,
-         METH_VARARGS},
+         METH_NOARGS},
         {"_timer_stop",
          (PyCFunction)Timer__timer_stop,
          METH_NOARGS},
+        {"_update_interval",
+         (PyCFunction)Timer__update_interval,
+         METH_VARARGS},
+        {"_update_single_shot",
+         (PyCFunction)Timer__update_single_shot,
+         METH_VARARGS},
         {}  // sentinel
     },
 };
