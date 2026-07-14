@@ -48,17 +48,8 @@ class TimerMac(_macosx.Timer, TimerBase):
     def _timer_set_single_shot(self):
         self._update_single_shot(self._single)
 
-
-class FigureCanvasMac(FigureCanvasAgg, _macosx.FigureCanvas, FigureCanvasBase):
+class FigureCanvasMac(_macosx.FigureCanvas, FigureCanvasBase):
     # docstring inherited
-
-    # Ideally this class would be `class FCMacAgg(FCAgg, FCMac)`
-    # (FC=FigureCanvas) where FCMac would be an ObjC-implemented mac-specific
-    # class also inheriting from FCBase (this is the approach with other GUI
-    # toolkits).  However, writing an extension type inheriting from a Python
-    # base class is slightly tricky (the extension type must be a heap type),
-    # and we can just as well lift the FCBase base up one level, keeping it *at
-    # the end* to have the right method resolution order.
 
     required_interactive_framework = "macosx"
     _timer_cls = TimerMac
@@ -66,7 +57,9 @@ class FigureCanvasMac(FigureCanvasAgg, _macosx.FigureCanvas, FigureCanvasBase):
 
     def __init__(self, figure):
         _init_macosx()
-        super().__init__(figure=figure)
+        FigureCanvasBase.__init__(self, figure=figure)
+        width, height = self.get_width_height()
+        _macosx.FigureCanvas.__init__(self, width, height)
 
     def draw(self):
         """Render the figure and send the buffer to the macOS CALayer."""
@@ -159,6 +152,10 @@ class FigureCanvasMac(FigureCanvasAgg, _macosx.FigureCanvas, FigureCanvasBase):
         # Set up a SIGINT handler to allow terminating a plot via CTRL-C.
         with _allow_interrupt_macos():
             self._start_event_loop(timeout=timeout)  # Forward to ObjC implementation.
+
+
+class FigureCanvasMacAgg(FigureCanvasAgg, FigureCanvasMac):
+    pass
 
 
 class NavigationToolbar2Mac(_macosx.NavigationToolbar2, NavigationToolbar2):
@@ -294,6 +291,6 @@ class SubplotToolMac(_macosx.SubplotTool):
 
 @_Backend.export
 class _BackendMac(_Backend):
-    FigureCanvas = FigureCanvasMac
+    FigureCanvas = FigureCanvasMacAgg
     FigureManager = FigureManagerMac
     mainloop = FigureManagerMac.start_main_loop

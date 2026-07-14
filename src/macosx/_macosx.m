@@ -103,32 +103,15 @@ static int
 FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
-    PyObject *builtins = NULL,
-             *super_obj = NULL,
-             *super_init = NULL,
-             *init_res = NULL,
-             *wh = NULL;
-    // super(FigureCanvasMac, self).__init__(*args, **kwargs)
-    if (!(builtins = PyImport_AddModule("builtins"))  // borrowed.
-            || !(super_obj = PyObject_CallMethod(builtins, "super", "OO", &FigureCanvasType, self))
-            || !(super_init = PyObject_GetAttrString(super_obj, "__init__"))
-            || !(init_res = PyObject_Call(super_init, args, kwds))) {
-        goto exit;
-    }
+
     int width, height;
-    if (!(wh = PyObject_CallMethod((PyObject *)self, "get_width_height", ""))
-            || !PyArg_ParseTuple(wh, "ii", &width, &height)) {
-        goto exit;
+    if (!PyArg_ParseTuple(args, "ii", &width, &height)) {
+        return -1;
     }
+
     NSRect rect = NSMakeRect(0.0, 0.0, width, height);
     self->object = [[MPLFigureCanvas alloc] initWithFrame: rect];
     [self->object setPyObject:(PyObject *)self];
-
-exit:
-    Py_XDECREF(super_obj);
-    Py_XDECREF(super_init);
-    Py_XDECREF(init_res);
-    Py_XDECREF(wh);
 
     END_OBJC_ENTRY
     return PyErr_Occurred() ? -1 : 0;
