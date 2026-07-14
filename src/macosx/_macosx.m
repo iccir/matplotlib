@@ -1078,11 +1078,51 @@ choose_save_file(PyObject *unused, PyObject *args)
     RETURN_NULL_OR_NONE
 }
 
+
+static int
+ModuleExec(PyObject *m)
+{
+    static BOOL sLoaded = NO;
+
+    // Use an os_unfair_lock as PyMutex requires Python >= 3.13
+    static os_unfair_lock sLoadedLock = OS_UNFAIR_LOCK_INIT;
+
+    BOOL wasModuleAlreadyLoaded = NO;
+
+    os_unfair_lock_lock(&sLoadedLock);
+    wasModuleAlreadyLoaded = sLoaded;
+    sLoaded = YES;
+    os_unfair_lock_unlock(&sLoadedLock);
+
+    if (wasModuleAlreadyLoaded) {
+        PyErr_SetString(PyExc_ImportError,
+                        "cannot load module more than once per process");
+        return -1;
+    }
+
+    if (PyModule_AddType(m, &FigureCanvasType)
+        || PyModule_AddType(m, &FigureManagerType)
+        || PyModule_AddType(m, &NavigationToolbar2Type)
+        || PyModule_AddType(m, &TimerType)
+        || PyModule_AddType(m, &SubplotToolType)) {
+        return -1;
+    }
+    return 0;
+}
+
 static struct PyModuleDef moduledef = {
     .m_base = PyModuleDef_HEAD_INIT,
     .m_name = "_macosx",
     .m_doc = PyDoc_STR("macOS native backend"),
-    .m_size = -1,
+    .m_size = 0,
+    .m_slots = (PyModuleDef_Slot[]){
+        {Py_mod_exec, ModuleExec},
+        {Py_mod_multiple_interpreters, Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED},
+#ifdef Py_GIL_DISABLED
+        {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+#endif
+        {0, NULL}
+    },
     .m_methods = (PyMethodDef[]){
         {"_init",
          (PyCFunction)_init,
@@ -1126,20 +1166,7 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__macosx(void)
 {
-    PyObject *m;
-    if (!(m = PyModule_Create(&moduledef))
-        || PyModule_AddType(m, &FigureCanvasType)
-        || PyModule_AddType(m, &FigureManagerType)
-        || PyModule_AddType(m, &NavigationToolbar2Type)
-        || PyModule_AddType(m, &TimerType)
-        || PyModule_AddType(m, &SubplotToolType)) {
-        Py_XDECREF(m);
-        return NULL;
-    }
-#ifdef Py_GIL_DISABLED
-    PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
-#endif
-    return m;
+    return PyModuleDef_Init(&moduledef);
 }
 
 #pragma GCC visibility pop
