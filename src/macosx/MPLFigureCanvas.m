@@ -375,7 +375,7 @@
     int x, y;
     [self _getDevicePointWithEvent:event x:&x y:&y];
 
-    MPLCallMethod(_pyObject, "_handle_scroll_event",
+    MPLCallMethod(_pyObject, "_handle_scroll_wheel",
         "iiik", x, y, step, [event modifierFlags]
     );
 }
