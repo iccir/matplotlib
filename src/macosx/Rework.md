@@ -3,20 +3,9 @@
 #### Pull Requests
 
 - ~~[31769: Fix several MacOS memory management bugs](https://github.com/matplotlib/matplotlib/pull/31769)~~
-- [31855: Convert macOS backend to ARC](https://github.com/matplotlib/matplotlib/pull/31855)
+- ~~[31855: Convert macOS backend to ARC](https://github.com/matplotlib/matplotlib/pull/31855)~~
 - [31977: Use CoreText to find macOS fonts
 ](https://github.com/matplotlib/matplotlib/pull/31977)
-
-#### Issues fixed in "arc" branch:
-
-- [21788: Apparent memory issue?](https://github.com/matplotlib/matplotlib/issues/21788)
-- [27147: Embedded Python uncatchable hard exit on closing last matplotlib window](https://github.com/matplotlib/matplotlib/issues/27147)
-- [29076: Calling start() multiple times on a macos timer doesn't stop the previous timer
-](https://github.com/matplotlib/matplotlib/issues/29076)
-- [31797: Re-enable Automatic Reference Counting (ARC) for macOS backend.
-](https://github.com/matplotlib/matplotlib/issues/31797)
-- [31798: macOS backend should always pair +alloc/-init calls
-](https://github.com/matplotlib/matplotlib/issues/31798)
 
 #### Issues fixed in "coretext-find-fonts" branch:
 
