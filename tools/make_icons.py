@@ -240,6 +240,11 @@ def make_icons() -> None:
         type=Path,
         default=Path(__file__).parent / DEFAULT_IMAGES_PATH,
         help="Directory where to write the PNG/PDF files.")
+    parser.add_argument(
+        "--macosx",
+        action='store_true',
+        help="Convert SVG files created with 'make_macosx_svgs.py'.")
+
     args = parser.parse_args()
 
     source_dir = args.source_dir
@@ -257,13 +262,19 @@ def make_icons() -> None:
 
     converter = ImageConverter()
 
-    for name in TOOLBAR_ICON_NAMES:
-        process_toolbar_icon(name, source_dir, dest_dir, converter)
+    if args.macosx:
+        for path in source_dir.glob("macosx_*.svg"):
+            converter.open_svg(path)
+            converter.export_png(dest_dir / f"{path.stem}.png")
 
-    for name in ("matplotlib", "matplotlib_small"):
-        converter.open_svg(source_dir / f"{name}.svg")
-        converter.export_pdf(dest_dir / f"{name}.pdf")
-        converter.export_png(dest_dir / f"{name}.png")
+    else:
+        for name in TOOLBAR_ICON_NAMES:
+            process_toolbar_icon(name, source_dir, dest_dir, converter)
+
+        for name in ("matplotlib", "matplotlib_small"):
+            converter.open_svg(source_dir / f"{name}.svg")
+            converter.export_pdf(dest_dir / f"{name}.pdf")
+            converter.export_png(dest_dir / f"{name}.png")
 
     converter.run()
 
