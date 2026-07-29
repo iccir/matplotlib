@@ -40,4 +40,3 @@
 - ~~Test full-keyboard accessibility with main figure window~~
 - ~~Make `macosx-staging` branch. Start migrating fixes in a way that preserves git history.~~
 - Research additional `clang-tidy` and static analyzer settings.
-

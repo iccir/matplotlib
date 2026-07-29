@@ -17,7 +17,7 @@ extern os_log_t MPLGetLogger(void)
     dispatch_once(&onceToken, ^{
         sLogger = os_log_create("org.matplotlib", "org.matplotlib");
     });
-    
+
     return sLogger;
 }
 
@@ -79,7 +79,7 @@ NSString *MPLGetStringWithPyString(PyObject *pyString)
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
         return nil;
     }
-    
+
     if (!PyUnicode_Check(pyString)) {
         PyErr_SetString(PyExc_RuntimeError, "Input is not a string");
         return nil;
@@ -139,7 +139,7 @@ extern NSArray<NSString *> *MPLGetStringArrayWithPySequence(PyObject *pySequence
 extern NSString *MPLGetStringWithPySequence(PyObject *pySequence)
 {
     NSArray *array = MPLGetStringArrayWithPySequence(pySequence);
-    
+
     if (array && ([array count] != 1)) {
         PyErr_SetString(PyExc_RuntimeError, "Input is not a sequence of exactly one string");
         return nil;
@@ -207,17 +207,17 @@ NSData * _Nullable MPLGetBufferWithPyObject(
         deallocator(NULL, 0);
         return nil;
     }
-    
+
     if (expectedDimensions && (expectedDimensions != buffer->ndim)) {
         PyErr_SetString(PyExc_RuntimeError, "Unexpected buffer dimensions");
         deallocator(NULL, 0);
         return nil;
     }
-    
+
     if (expectedDimensions && outShape) {
         memcpy(outShape, buffer->shape, sizeof(ssize_t) * expectedDimensions);
     }
-    
+
     return [[NSData alloc] initWithBytesNoCopy: buffer->buf
                                         length: buffer->len
                                    deallocator: deallocator];
@@ -278,7 +278,7 @@ CGImageRef sCreateImage(
         [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithCGContext:context flipped:flipped]];
 
         callback(context);
-        
+
         [NSGraphicsContext setCurrentContext:savedContext];
 
         result = CGBitmapContextCreateImage(context);

@@ -36,7 +36,7 @@
     CGRect figureCanvasFrame = [figureCanvas frame];
     CGRect contentRect = figureCanvasFrame;
     contentRect.origin = CGPointMake(100, 350);
-    
+
     NSWindowStyleMask styleMask = NSWindowStyleMaskTitled
                                 | NSWindowStyleMaskClosable
                                 | NSWindowStyleMaskResizable
@@ -50,7 +50,7 @@
     [window setDelegate:self];
     [window makeFirstResponder:figureCanvas];
     [window setReleasedWhenClosed:NO];
-    
+
     // Match the window's color space to our Agg buffer.
     // This prevents an in-process color space conversion when compositing and
     // may allow for a GPU-accelerated conversion at the WindowServer level.
@@ -148,7 +148,7 @@
         @"tab":    @( NSWindowTabbingModePreferred  ),
         @"window": @( NSWindowTabbingModeDisallowed )
     } objectForKey:windowMode] : nil;
-    
+
     [[self window] setTabbingMode:[tabbingModeValue integerValue]];
 }
 
@@ -156,7 +156,7 @@
 {
     if (_toolbar) return;
     _toolbar = toolbar;
-    
+
     NSWindow *window = [self window];
     NSView   *canvas = [self figureCanvas];
 
@@ -199,4 +199,3 @@
 }
 
 @end
-

@@ -48,6 +48,7 @@ class TimerMac(_macosx.Timer, TimerBase):
     def _timer_set_single_shot(self):
         self._update_single_shot(self._single)
 
+
 class FigureCanvasMac(_macosx.FigureCanvas, FigureCanvasBase):
     # docstring inherited
 
@@ -86,7 +87,7 @@ class FigureCanvasMac(_macosx.FigureCanvas, FigureCanvasBase):
         # Size from macOS is physical pixels
         if self._set_device_pixel_ratio(scale):
             self._handle_resize(width, height)
-            self.draw_idle()     
+            self.draw_idle()
 
     def _handle_resize(self, width, height):
         # Size from macOS is physical pixels
@@ -146,7 +147,7 @@ class FigureCanvasMac(_macosx.FigureCanvas, FigureCanvasBase):
     def _handle_scroll_wheel(self, x, y, step, modifiers):
         MouseEvent("scroll_event", self, x, y, step=step,
                    modifiers=self._mpl_modifiers(modifiers))._process()
-        
+
     def start_event_loop(self, timeout=0):
         # docstring inherited
         # Set up a SIGINT handler to allow terminating a plot via CTRL-C.
@@ -243,7 +244,7 @@ class FigureManagerMac(_macosx.FigureManager, FigureManagerBase):
     def destroy(self):
         self._close_and_clear_window()
         super().destroy()
-        
+
     @classmethod
     def start_main_loop(cls):
         # Set up a SIGINT handler to allow terminating a plot via CTRL-C.

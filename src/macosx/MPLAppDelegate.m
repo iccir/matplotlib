@@ -20,7 +20,7 @@
         _imageDictionary = imageDictionary;
         MPLLog("[Lifecycle] MPLAppDelegate<%p> init", self);
     }
-    
+
     return self;
 }
 
@@ -41,7 +41,7 @@
 {
     [self _buildMainMenu];
     [self _buildAppIcon];
-    
+
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 }
 
@@ -61,20 +61,20 @@
 
     __auto_type menu = ^(NSString *title) {
         NSMenu *menu = [[NSMenu alloc] init];
-        
+
         NSMenuItem *menuItem = [[NSMenuItem alloc] init];
         [menuItem setTitle:title];
         [menuItem setSubmenu:menu];
         [menuItem setTarget:menu];
         [menuItem setAction:@selector(submenuAction:)];
         [mainMenu addItem:menuItem];
-        
+
         currentMenu = menu;
     };
 
     __auto_type item = ^(NSString *title, NSEventModifierFlags flags, NSString *keyEquivalent, SEL action) {
         NSMenuItem *item = [[NSMenuItem alloc] init];
-        
+
         [item setTitle:title];
         [item setKeyEquivalent:keyEquivalent];
         [item setKeyEquivalentModifierMask:flags];
@@ -84,18 +84,18 @@
 
         currentItem = item;
     };
-    
+
     __auto_type separator = ^() {
         [currentMenu addItem:[NSMenuItem separatorItem]];
     };
-    
+
     menu(@"Matplotlib");
     item(@"Hide Matplotlib", command,       @"h", @selector(hide:));
     item(@"Hide Others",     optionCommand, @"h", @selector(hideOtherApplications:));
     item(@"Show All",        0,             @"",  @selector(unhideAllApplications:));
     separator();
     item(@"Quit Matplotlib", command,       @"q", @selector(terminate:));
-    
+
     menu(@"File");
     item(@"Close",     command,       @"w", @selector(performClose:));
     item(@"Close All", optionCommand, @"w", @selector(closeAll:));
@@ -123,7 +123,7 @@
     [NSApp setHelpMenu:currentMenu];
 
     [NSApp setMainMenu:mainMenu];
-    
+
     for (NSWindow *window in [NSApp windows]) {
         [NSApp addWindowsItem:window title:[window title] filename:NO];
     }
@@ -134,12 +134,12 @@
     NSDictionary *imageDictionary = _imageDictionary;
     NSImage *shadowImage;
     NSImage *maskImage;
-    
+
     __auto_type getImage = ^(NSString *key) {
         NSString *path = [imageDictionary objectForKey:key];
         return path ? [[NSImage alloc] initWithContentsOfFile:path] : nil;
     };
-    
+
     if (@available(macOS 26.0, *)) {
         shadowImage = getImage(@"macosx_appicon_shadow26");
         maskImage   = getImage(@"macosx_appicon_mask26");
@@ -179,11 +179,11 @@
         // prior to drawing.
         CGContextTranslateCTM(context, 0, iconSize.height);
         CGContextScaleCTM(context, 1, -1);
-        
+
         CGContextDrawImage( context, getFrame(shadowCGImage),  shadowCGImage);
         CGContextClipToMask(context, getFrame(maskCGImage),    maskCGImage);
         CGContextDrawImage( context, getFrame(contentCGImage), contentCGImage);
-        
+
         CGImageRelease(maskCGImage);
     });
 

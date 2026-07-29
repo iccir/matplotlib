@@ -48,7 +48,7 @@
             NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
             NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect
         );
-        
+
         CALayer *layer = [CALayer layer];
         [layer setDelegate:self];
         [layer setContentsGravity:kCAGravityResize];
@@ -57,7 +57,7 @@
 
         [self setLayer:layer];
         [self setWantsLayer:YES];
-        
+
         [self addTrackingArea:[[NSTrackingArea alloc] initWithRect: CGRectZero
                                                            options: options
                                                              owner: self
@@ -232,7 +232,7 @@
 
     const char *keyCString = [keyString UTF8String];
     if (!keyCString) return;
-    
+
     MPLCallMethod(_pyObject, "_handle_key", "isii", (int)isPress, keyCString, x, y);
 }
 
@@ -251,7 +251,7 @@
     } else {
         stringToUse = mappedString;
     }
-    
+
     NSString *keyString = [self _keyStringWithString: stringToUse
                                        modifierFlags: flags
                                        controlString: @"ctrl"];
@@ -284,7 +284,7 @@
 
     BOOL isPress = currentFlags > _previousModifierFlags;
     [self _callHandleKeyWithKeyString:keyString isPress:isPress];
-    
+
     _previousModifierFlags = currentFlags;
 }
 
@@ -308,7 +308,7 @@
              // emulate a middle-button click
              buttonNumber = 2;
         }
-        
+
         _isLeftMouseDown = YES;
         _emulatedLeftMouseDownButton = buttonNumber;
 
@@ -431,7 +431,7 @@
     // Keep track of whether this view has the hand cursor active rather
     // than comparing against the process-level [NSCursor currentCursor]
     _isHandCursorActive = (cursorType == 4);
-    
+
     if (_isHandCursorActive) {
         [self _updateHandCursor];
 
@@ -443,7 +443,7 @@
             @(6): [NSCursor resizeLeftRightCursor],
             @(7): [NSCursor resizeUpDownCursor],
         } objectForKey:@(cursorType)];
-        
+
         [cursor set];
     }
 }

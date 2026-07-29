@@ -32,7 +32,7 @@ static const CGFloat sButtonGap = 2;
         [self addSubview:_buttonContainer];
 
         [self _addMessageField];
-        
+
         MPLLog("[Lifecycle] MPLNavigationToolbar2<%p> init", self);
     }
 
@@ -83,7 +83,7 @@ static const CGFloat sButtonGap = 2;
         [[messageField rightAnchor]   constraintEqualToAnchor:[self rightAnchor] constant:-sButtonGap],
         [[messageField centerYAnchor] constraintEqualToAnchor:[self centerYAnchor]]
     ]];
-    
+
     _messageField = messageField;
 }
 
@@ -91,7 +91,7 @@ static const CGFloat sButtonGap = 2;
 - (nullable NSButton *) _buttonWithCallbackName:(NSString *)callbackName
 {
     NSUInteger index = [_callbackNames indexOfObject:callbackName];
-    
+
     return (index != NSNotFound) ? [_buttons objectAtIndex:index] : nil;
 }
 
@@ -117,7 +117,7 @@ static const CGFloat sButtonGap = 2;
     NSImage *image = [[NSImage alloc] initWithContentsOfFile:imagePath];
     [image setSize:CGSizeMake(24, 24)];
     [image setTemplate:YES];
-    
+
     CGRect frame = CGRectMake(_nextButtonX, 0, sButtonHeight, sButtonHeight);
 
     NSButton *button = [[NSButton alloc] initWithFrame:frame];
@@ -153,7 +153,7 @@ static const CGFloat sButtonGap = 2;
     for (NSButton *button in _buttons) {
         [button setState:NSControlStateValueOff];
     }
-    
+
     NSButton *button = [self _buttonWithCallbackName:callbackName];
     [button setButtonType:NSButtonTypePushOnPushOff];
     [button setState:NSControlStateValueOn];

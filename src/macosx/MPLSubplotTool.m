@@ -147,7 +147,7 @@
     __block NSTextField *firstLabelField;
     __block NSSlider    *firstSlider;
     __block NSTextField *firstValueField;
-    
+
     __auto_type addParameterRow = ^(NSString *keyName) {
         NSView *rowView = [[NSView alloc] init];
 
@@ -198,15 +198,15 @@
             [[valueField leftAnchor]  constraintEqualToAnchor:[slider     rightAnchor] constant:12],
             [[valueField rightAnchor] constraintEqualToAnchor:[rowView    rightAnchor] constant:0],
             [[valueField widthAnchor] constraintEqualToConstant:64],
-            
+
             [[labelField firstBaselineAnchor] constraintEqualToAnchor:[slider firstBaselineAnchor]],
             [[valueField firstBaselineAnchor] constraintEqualToAnchor:[slider firstBaselineAnchor]],
 
             [[slider centerYAnchor] constraintEqualToAnchor:[rowView centerYAnchor]],
-            
+
             [[rowView heightAnchor] constraintGreaterThanOrEqualToConstant:24]
         ]];
-        
+
         // All sliders should be equal widths, etc.
         if (firstLabelField && firstSlider && firstValueField) {
             [NSLayoutConstraint activateConstraints:@[
@@ -224,20 +224,20 @@
 
     __auto_type makeButton = ^(NSString *title, SEL action) {
         NSButton *button = [NSButton buttonWithTitle:title target:self action:action];
-    
+
         [button setContentCompressionResistancePriority:NSLayoutPriorityDefaultHigh forOrientation:NSLayoutConstraintOrientationHorizontal];
         [button setContentHuggingPriority:1 forOrientation:NSLayoutConstraintOrientationHorizontal];
 
         return button;
     };
-    
+
     __auto_type addButtonsRow = ^() {
         NSButton *copyButton  = makeButton(@"Copy Values",  @selector(copyValues:));
         NSButton *tightButton = makeButton(@"Tight Layout", @selector(selectTightLayout:));
         NSButton *resetButton = makeButton(@"Reset",        @selector(resetLayout:));
 
         NSStackView *rowView = [NSStackView stackViewWithViews:@[ copyButton, tightButton, resetButton ]];
-        
+
         [rowView setOrientation:NSUserInterfaceLayoutOrientationHorizontal];
         [rowView setAlignment:NSLayoutAttributeCenterY];
         [rowView setDistribution:NSStackViewDistributionFillEqually];
@@ -257,9 +257,9 @@
     for (NSString *key in [MPLSubplotTool _subplotParameterOrder]) {
         addParameterRow(key);
     }
-    
+
     addButtonsRow();
-    
+
     [stackView setOrientation:NSUserInterfaceLayoutOrientationVertical];
     [stackView setDistribution:NSStackViewDistributionFillEqually];
     [stackView setSpacing:4];
@@ -274,7 +274,7 @@
         [[stackView topAnchor]     constraintEqualToAnchor:[contentView topAnchor]],
         [[stackView bottomAnchor]  constraintEqualToAnchor:[contentView bottomAnchor]],
     ]];
-    
+
     _stackView = stackView;
 }
 
@@ -305,7 +305,7 @@
     [self setTop:top];
     [self setWspace:wspace];
     [self setHspace:hspace];
-    
+
     _inUpdate = NO;
 }
 

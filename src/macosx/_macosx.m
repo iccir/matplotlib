@@ -216,7 +216,7 @@ FigureCanvas_set_rubberband(FigureCanvas *self, PyObject *args)
     }
 
     [self->object updateRubberbandWithDeviceX0:x0 y0:y0 x1:x1 y1:y1];
-    
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -355,7 +355,7 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
 
     self->object = [[MPLFigureManager alloc] initWithFigureCanvas:figureCanvas];
     [self->object setPyObject:(PyObject *)self];
-    
+
     if (!FigureManagerHashTable) {
         FigureManagerHashTable = [NSHashTable weakObjectsHashTable];
     }
@@ -399,7 +399,7 @@ FigureManager__close_and_clear_window_impl(FigureManager *self)
         [self->object close];
         [self->object setPyObject:NULL];
         self->object = nil;
-        
+
         [[MPLEventLoop sharedInstance] checkStopCondition];
     }
 }
@@ -606,7 +606,7 @@ NavigationToolbar2_add_item(NavigationToolbar2 *self, PyObject *args)
                            tooltip: [strings objectAtIndex:1]
                          imagePath: [strings objectAtIndex:2]
                       callbackName: [strings objectAtIndex:3]];
-     
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -757,7 +757,7 @@ Timer__update_interval(Timer *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "i", &intervalInMsecs)) {
         return NULL;
     }
-    
+
     [self->object updateIntervalInMsecs:intervalInMsecs];
 
     END_OBJC_ENTRY
@@ -773,7 +773,7 @@ Timer__update_single_shot(Timer *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "p", &singleShot)) {
         return NULL;
     }
-    
+
     [self->object updateSingleShot:(singleShot > 0) ? YES : NO];
 
     END_OBJC_ENTRY
@@ -874,7 +874,7 @@ SubplotTool__send_params_to_ui(SubplotTool *self, PyObject *args)
                              top: top
                           wspace: wspace
                           hspace: hspace];
-     
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -935,7 +935,7 @@ _init(PyObject *unused, PyObject *args)
 
     PyObject *imagesDict;
     if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesDict)) { return NULL; }
-    
+
     NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesDict);
     if (!imagesDictionary) { return NULL; }
 
@@ -956,7 +956,7 @@ _init(PyObject *unused, PyObject *args)
         // this is needed to keep the application responsive while waiting for input
         PyOS_InputHook = wait_for_stdin;
     });
-    
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -996,7 +996,7 @@ wake_on_fd_write(PyObject *unused, PyObject *args)
         dispatch_source_cancel(source);
     });
 
-    dispatch_resume(source);    
+    dispatch_resume(source);
 
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
@@ -1050,7 +1050,7 @@ choose_save_file(PyObject *unused, PyObject *args)
         PyErr_SetString(PyExc_RuntimeError, "Invalid arguments to choose_save_file");
         return NULL;
     }
-    
+
     NSString *title = [strings objectAtIndex:0];
     NSString *directory = [strings objectAtIndex:1];
     NSString *defaultFilename = [strings objectAtIndex:2];

@@ -4,13 +4,13 @@
     Historically, the macOS backend utilitized a single-shot timer as a mechanism
     to forward draw_idle() requests to the main thread (#25553/#27527). This had
     the side-effect of allowing external clients to use the timer API to do the same.
-    
+
     This class has been written to be thread safe in order to err on the side
     of caution. This may change in the future as the discussion of worker-thread
     usage is ongoing (#31968).
-    
+
     To implement thread-safety, we do the following:
-    
+
     1) Properties and ivars (except _storage) are only modified on the main thread.
 
     2) We store our PyObject inside a special MPLTimerStorage class that also
@@ -119,7 +119,7 @@
             MPLCallMethod(pyObject, "_on_timer", "");
             Py_DECREF(pyObject);
         }
-        
+
         __strong MPLTimer *strongSelf = weakSelf;
         if ([strongSelf isSingleShot]) {
             [strongSelf _cancelAndClearSource];

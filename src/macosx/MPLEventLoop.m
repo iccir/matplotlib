@@ -39,7 +39,7 @@ typedef NS_ENUM(NSInteger, LoopType) {
     dispatch_once(&onceToken, ^{
         sharedInstance = [[MPLEventLoop alloc] init];
     });
-    
+
     return sharedInstance;
 }
 
@@ -48,7 +48,7 @@ typedef NS_ENUM(NSInteger, LoopType) {
     if ((self = [super init])) {
         _wasRunCalledAtLeastOnce = [NSApp isRunning];
     }
-    
+
     return self;
 }
 
@@ -100,14 +100,14 @@ typedef NS_ENUM(NSInteger, LoopType) {
     LoopType previousLoopType = _currentLoopType;
     _currentLoopType = loopType;
     _loopCount++;
-    
+
     MPLLog("[EventLoop] +++ loop #%ld entry +++ %@", (long)_loopCount, label);
     callback();
     MPLLog("[EventLoop] --- loop #%ld exit  --- %@", (long)_loopCount, label);
-    
+
     _loopCount--;
     _currentLoopType = previousLoopType;
-    
+
     if (_shouldStop) {
         if (_loopCount > 0) {
             [self stop];
@@ -209,7 +209,7 @@ typedef NS_ENUM(NSInteger, LoopType) {
     MPLLog("[EventLoop] stop requested, _loopCount = %ld", (long)_loopCount);
 
     _shouldStop = YES;
-    
+
     if (_currentLoopType == LoopTypeRun) {
         [NSApp stop:self];
     } else if (_currentLoopType == LoopTypeModal) {
@@ -225,4 +225,3 @@ typedef NS_ENUM(NSInteger, LoopType) {
 }
 
 @end
-
