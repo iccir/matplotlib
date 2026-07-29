@@ -190,9 +190,6 @@ APPICON_SECTORS = (
 )
 
 
-
-
-
 def svg_element(
     name: str,
     attrs: Mapping[str, str] | None = None,
@@ -239,7 +236,7 @@ def svg_radial_gradient(
 
 
 def svg_stop(offset: float, color: str, opacity: float = 1.0) -> str:
-    attrs={"offset": f"{offset*100:.1f}%", "stop-color": color}
+    attrs = {"offset": f"{offset*100:.1f}%", "stop-color": color}
     if opacity != 1.0:
         attrs["stop-opacity"] = f"{opacity:.3f}"
     return svg_element("stop", attrs)
@@ -366,8 +363,6 @@ class SquircleGenerator:
         ))
 
 
-
-
 class AppIconGenerator():
 
     def __init__(self, appearance: Appearance) -> str:
@@ -376,10 +371,8 @@ class AppIconGenerator():
         self._defs = []
         self._children = []
 
-
     def add_def(self, child: str) -> None:
         self._defs.extend(("", child))
-
 
     def add_child(self, child: str) -> None:
         self._children.extend(("", child))
@@ -390,7 +383,7 @@ class AppIconGenerator():
         if top_color is None or bottom_color is None:
             return
 
-        gradient_id="background-gradient"
+        gradient_id = "background-gradient"
 
         self.add_def(svg_element("linearGradient", {
             "id": "background-gradient",
@@ -402,7 +395,6 @@ class AppIconGenerator():
             "x": "0", "y": "0", "width": "100%", "height": "100%",
             "fill": f"url(#{gradient_id})"
         }))
-
 
     def _add_grid(self):
         def path(d: str) -> str:
@@ -438,14 +430,12 @@ class AppIconGenerator():
             circle("83.5")
         ]))
 
-
     def _add_radial_gradient(self, id: str, r: float, children: Iterable[str]) -> None:
         attrs = {
             "id": id, "gradientUnits": "userSpaceOnUse",
             "cx": "128", "cy": "128", "r": f"{r}"
         }
         self.add_def(svg_element("radialGradient", attrs, children))
-
 
     def _add_sectors(self):
         path_defs = []
@@ -499,7 +489,6 @@ class AppIconGenerator():
         self.add_child(shadow_group)
         self.add_child(svg_element("g", {"fill": "none", "stroke": "none"}, paths))
 
-
     def _add_middle_dot(self):
         gradient_id = "middle-dot-gradient"
         color = self._vars["middle_dot_color"]
@@ -516,7 +505,6 @@ class AppIconGenerator():
 
         self.add_def(middle_dot_gradient)
         self.add_child(middle_dot)
-
 
     def make(self) -> str:
         self._add_background()
