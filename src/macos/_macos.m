@@ -8,6 +8,7 @@
 #import "MPLFigureCanvas.h"
 #import "MPLFigureManager.h"
 #import "MPLNavigationToolbar2.h"
+#import "MPLSubplotTool.h"
 
 #if !__has_feature(objc_arc_fields)
 #error "The macOS backend requires ARC C struct fields support (objc_arc_fields)."
@@ -806,6 +807,115 @@ static PyTypeObject TimerType = {
         {"_timer_stop",
          (PyCFunction)Timer__timer_stop,
          METH_NOARGS},
+#pragma mark - Subplot Controller
+
+typedef struct {
+    PyObject_HEAD
+    __strong MPLSubplotTool *object;
+} SubplotTool;
+
+static PyObject *
+SubplotTool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    return (PyObject *)((SubplotTool *)type->tp_alloc(type, 0));
+}
+
+static int
+SubplotTool_init(SubplotTool *self, PyObject *args, PyObject *kwds)
+{
+    BEGIN_OBJC_ENTRY
+
+    PyObject *figureManagerPyObject;
+    if (!PyArg_ParseTuple(args, "O", &figureManagerPyObject)) {
+        return -1;
+    }
+
+    MPLFigureManager *figureManager = ((FigureManager *)figureManagerPyObject)->object;
+
+    self->object = [[MPLSubplotTool alloc] initWithFigureManager:figureManager];
+    [self->object setPyObject:(PyObject *)self];
+
+    END_OBJC_ENTRY
+    return 0;
+}
+
+static void
+SubplotTool_dealloc(SubplotTool *self)
+{
+    BEGIN_OBJC_ENTRY
+    [self->object setPyObject:NULL];
+    self->object = nil;
+    END_OBJC_ENTRY
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyObject *
+SubplotTool_repr(SubplotTool *self)
+{
+    return PyUnicode_FromFormat("SubplotTool<%p> wrapping MPLSubplotTool<%p>",
+                                (void *)self, (__bridge void *)self->object);
+}
+
+static PyObject *
+SubplotTool__send_params_to_ui(SubplotTool *self, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+
+    double left, bottom, right, top, wspace, hspace;
+    if (!PyArg_ParseTuple(args, "dddddd", &left, &bottom, &right,
+                          &top, &wspace, &hspace)) { return NULL; }
+
+    [self->object updateWithLeft: left
+                          bottom: bottom
+                           right: right
+                             top: top
+                          wspace: wspace
+                          hspace: hspace];
+
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+SubplotTool_show(SubplotTool *self, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+    [self->object showWindow:self->object];
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyObject *
+SubplotTool_close(SubplotTool *self, PyObject *args)
+{
+    BEGIN_OBJC_ENTRY
+    [self->object close];
+    END_OBJC_ENTRY
+    RETURN_NULL_OR_NONE
+}
+
+static PyTypeObject SubplotToolType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "matplotlib.backends._macosx.SubplotTool",
+    .tp_doc = PyDoc_STR(""),
+    .tp_basicsize = sizeof(SubplotTool),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+
+    .tp_new = (newfunc)SubplotTool_new,
+    .tp_init = (initproc)SubplotTool_init,
+    .tp_dealloc = (destructor)SubplotTool_dealloc,
+    .tp_repr = (reprfunc)SubplotTool_repr,
+
+    .tp_methods = (PyMethodDef[]){  // All docstrings are inherited.
+        {"_send_params_to_ui",
+         (PyCFunction)SubplotTool__send_params_to_ui,
+         METH_VARARGS},
+        {"close",
+         (PyCFunction)SubplotTool_close,
+         METH_NOARGS},
+        {"show",
+         (PyCFunction)SubplotTool_show,
+         METH_NOARGS},
         {}  // sentinel
     },
 };
@@ -984,7 +1094,8 @@ ModuleExec(PyObject *m)
     if (PyModule_AddType(m, &FigureCanvasType)
         || PyModule_AddType(m, &FigureManagerType)
         || PyModule_AddType(m, &NavigationToolbar2Type)
-        || PyModule_AddType(m, &TimerType)) {
+        || PyModule_AddType(m, &TimerType)
+        || PyModule_AddType(m, &SubplotToolType)) {
         return -1;
     }
     return 0;
