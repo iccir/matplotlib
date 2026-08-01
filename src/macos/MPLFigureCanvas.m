@@ -318,10 +318,6 @@
         if (modifierFlags & NSEventModifierFlagControl) {
              // emulate a right-button click
              buttonNumber = 1;
-
-        } else if (modifierFlags & NSEventModifierFlagOption) {
-             // emulate a middle-button click
-             buttonNumber = 2;
         }
 
         _isLeftMouseDown = YES;
