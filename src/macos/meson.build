@@ -5,12 +5,14 @@ py3.extension_module(
   sources: files(
     '_macos.m',
     'MPLAppDelegate.m',
+    'MPLEventLoop.m',
     'MPLFigureCanvas.m',
     'MPLFigureManager.m',
     'MPLNavigationToolbar2.m',
     'MPLUtils.m',
   ),
   dependencies: dependency('appleframeworks', modules: 'Cocoa'),
+  # Note: '-Os' is the Apple-suggested optimization level for shipping code
   override_options: ['werror=true','optimization=s'],
   objc_args: [
     # Enable Objective-C ARC
