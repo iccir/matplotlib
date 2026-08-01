@@ -23,14 +23,13 @@ def _init_macos():
     # This will contain initialization code in a future PR
     _macos._init()
 
-class TimerMac(_macosx.Timer, TimerBase):
+class TimerMac(_macos.Timer, TimerBase):
     """Subclass of `.TimerBase` using libdispatch timer sources."""
 
     def __init__(self, *args, **kwargs):
-        _macosx.Timer.__init__(self)
+        _macos.Timer.__init__(self)
         TimerBase.__init__(self, *args, **kwargs)
 
-class FigureCanvasMac(_macos.FigureCanvas, FigureCanvasBase):
     def _timer_set_interval(self):
         self._update_interval(self._interval)
 
@@ -38,6 +37,7 @@ class FigureCanvasMac(_macos.FigureCanvas, FigureCanvasBase):
         self._update_single_shot(self._single)
 
 
+class FigureCanvasMac(_macos.FigureCanvas, FigureCanvasBase):
     # docstring inherited
 
     required_interactive_framework = "macos"
@@ -249,10 +249,10 @@ class FigureManagerMac(_macos.FigureManager, FigureManagerBase):
             self._raise()
 
 
-class SubplotToolMac(_macosx.SubplotTool):
+class SubplotToolMac(_macos.SubplotTool):
 
     def __init__(self, targetfig):
-        _macosx.SubplotTool.__init__(self, targetfig.canvas.manager)
+        _macos.SubplotTool.__init__(self, targetfig.canvas.manager)
         self._figure = targetfig
         self.update_defaults_from_figure()
 
