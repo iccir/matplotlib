@@ -12,11 +12,6 @@ from matplotlib.backend_bases import (
     MouseButton, TimerBase, _allow_interrupt, _Mode)
 
 
-class TimerMac(_macos.Timer, TimerBase):
-    """Subclass of `.TimerBase` using CFRunLoop timer events."""
-    # completely implemented at the C-level (in _macos.Timer)
-
-
 def _allow_interrupt_macos():
     """A context manager that allows terminating a plot by sending a SIGINT."""
     return _allow_interrupt(
@@ -28,8 +23,21 @@ def _init_macos():
     # This will contain initialization code in a future PR
     _macos._init()
 
+class TimerMac(_macosx.Timer, TimerBase):
+    """Subclass of `.TimerBase` using libdispatch timer sources."""
+
+    def __init__(self, *args, **kwargs):
+        _macosx.Timer.__init__(self)
+        TimerBase.__init__(self, *args, **kwargs)
 
 class FigureCanvasMac(_macos.FigureCanvas, FigureCanvasBase):
+    def _timer_set_interval(self):
+        self._update_interval(self._interval)
+
+    def _timer_set_single_shot(self):
+        self._update_single_shot(self._single)
+
+
     # docstring inherited
 
     required_interactive_framework = "macos"
