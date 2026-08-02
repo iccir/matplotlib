@@ -600,7 +600,7 @@ NavigationToolbar2_add_item(NavigationToolbar2 *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
 
-    NSArray<NSString *> *strings = MPLGetStringArrayWithPySequence(args);
+    MPLStringArray *strings = MPLGetStringArrayWithPySequence(args);
     if ([strings count] != 4) return NULL;
 
     [self->object addItemWithTitle: [strings objectAtIndex:0]
@@ -934,6 +934,12 @@ _init(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
 
+    PyObject *imagesDict;
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesDict)) { return NULL; }
+
+    NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesDict);
+    if (!imagesDictionary) { return NULL; }
+
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         if (!NSApp) {
@@ -941,7 +947,7 @@ _init(PyObject *unused, PyObject *args)
         }
 
         if (![NSApp delegate]) {
-            appDelegate = [[MPLAppDelegate alloc] init];
+            appDelegate = [[MPLAppDelegate alloc] initWithImageDictionary:imagesDictionary];
             [NSApp setDelegate:appDelegate];
         }
 
@@ -1040,7 +1046,7 @@ choose_save_file(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
 
-    NSArray<NSString *> *strings = MPLGetStringArrayWithPySequence(args);
+    MPLStringArray *strings = MPLGetStringArrayWithPySequence(args);
     if ([strings count] != 3) {
         PyErr_SetString(PyExc_RuntimeError, "Invalid arguments to choose_save_file");
         return NULL;
@@ -1121,7 +1127,7 @@ static struct PyModuleDef moduledef = {
     .m_methods = (PyMethodDef[]){
         {"_init",
          (PyCFunction)_init,
-         METH_NOARGS,
+         METH_VARARGS,
          PyDoc_STR(
             "Perform a one-time initialization of the backend. Sets up the NSApp delegate"
             "if one is not already present.")},
