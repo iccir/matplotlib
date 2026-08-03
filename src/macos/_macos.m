@@ -1128,7 +1128,7 @@ static struct PyModuleDef _macos_moduledef = {
          PyDoc_STR(
             "Perform a one-time initialization of the backend. Sets up the NSApp delegate"
             "if one is not already present.")},
-        {"event_loop_is_running",
+        {"is_initialized",
          (PyCFunction)_macos_is_initialized,
          METH_NOARGS,
          PyDoc_STR(
