@@ -100,7 +100,7 @@
                          change: (NSDictionary<NSKeyValueChangeKey, id> *) change
                         context: (void *) context
 {
-    if ((object == self) && [[MPLSubplotTool _subplotParameterOrder] containsObject:keyPath]) {
+    if ((object == self) && keyPath && [[MPLSubplotTool _subplotParameterOrder] containsObject:keyPath]) {
         if (!_inUpdate) {
             [self _sendParamsChanged];
         }

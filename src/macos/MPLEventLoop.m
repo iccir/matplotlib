@@ -156,7 +156,9 @@ typedef NS_ENUM(NSInteger, LoopType) {
                                                        inMode: NSDefaultRunLoopMode
                                                       dequeue: YES];
 
-                [NSApp sendEvent:event];
+                if (event) {
+                    [NSApp sendEvent:event];
+                }
             }
         }
     }];

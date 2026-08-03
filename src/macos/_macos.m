@@ -446,7 +446,8 @@ FigureManager_set_window_title(FigureManager *self,
                                PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
-    [self->object setWindowTitle:MPLGetStringWithPySequence(args)];
+    NSString *title = MPLGetStringWithPySequence(args);
+    if (title) [self->object setWindowTitle:title];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -648,7 +649,8 @@ static PyObject *
 NavigationToolbar2_set_message(NavigationToolbar2 *self, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
-    [self->object updateMessage:MPLGetStringWithPySequence(args)];
+    NSString *message = MPLGetStringWithPySequence(args);
+    if (message) [self->object updateMessage:message];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
