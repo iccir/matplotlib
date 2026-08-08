@@ -1000,9 +1000,9 @@ _macos_wake_on_fd_write(PyObject *unused, PyObject *args)
     if (!PyArg_ParseTuple(args, "i", &fd)) { return NULL; }
     
     dispatch_source_t source = dispatch_source_create(
-                                                      DISPATCH_SOURCE_TYPE_READ, fd, 0,
-                                                      dispatch_get_main_queue()
-                                                      );
+        DISPATCH_SOURCE_TYPE_READ, fd, 0,
+        dispatch_get_main_queue()
+    );
     
     dispatch_source_set_event_handler(source, ^{
         PyGILState_STATE gstate = PyGILState_Ensure();
@@ -1022,7 +1022,7 @@ static PyObject *
 _macos_stop(PyObject *self, PyObject *unused)
 {
     BEGIN_OBJC_ENTRY
-    sStopWithEvent();
+    [[MPLEventLoop sharedInstance] stop];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
