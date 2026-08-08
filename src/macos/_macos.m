@@ -52,10 +52,13 @@ static NSHashTable<MPLFigureManager *> *sFigureManagerHashTable = nil;
 static BOOL sIsInitialized = NO;
 
 // Convert an Objective-C exception into a Python RuntimeError
-static void
-sErrSetException(NSException *exception)
+static void sErrSetException(NSException *exception)
 {
-    PyErr_SetString(PyExc_RuntimeError, [[exception reason] UTF8String]);
+    const char *cString = [[exception reason] UTF8String];
+    if (!cString) cString = [[exception name] UTF8String];
+    if (!cString) cString = "Objective-C Exception";
+
+    PyErr_SetString(PyExc_RuntimeError, cString);
 }
 
 // Signal handler for SIGINT, set in wait_for_stdin() below
@@ -153,9 +156,18 @@ FigureCanvas_update_layer_contents(FigureCanvas *self, PyObject *args)
         return NULL;
     }
 
-    [self->object updateLayerContentsWithBuffer: buffer
-                                    deviceWidth: (size_t)shape[1]
-                                   deviceHeight: (size_t)shape[0]];
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)buffer);
+
+    if (!provider) {
+        PyErr_SetString(PyExc_RuntimeError, "CGDataProviderCreateWithCFData() failed");
+        return NULL;
+    }
+
+    [self->object updateLayerContentsWithDataProvider: provider
+                                          deviceWidth: (size_t)shape[1]
+                                         deviceHeight: (size_t)shape[0]];
+
+    CGDataProviderRelease(provider);
 
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE;
@@ -268,7 +280,7 @@ FigureCanvas_stop_event_loop(FigureCanvas *self)
 
 static PyTypeObject FigureCanvasType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "matplotlib.backends._macosx.FigureCanvas",
+    .tp_name = "matplotlib.backends._macos.FigureCanvas",
     .tp_doc = PyDoc_STR("A FigureCanvas object wraps a Cocoa NSView object."),
     .tp_basicsize = sizeof(FigureCanvas),
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
@@ -350,7 +362,7 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
 {
     BEGIN_OBJC_ENTRY
     PyObject *figureCanvasPyObject;
-    if (!PyArg_ParseTuple(args, "O", &figureCanvasPyObject)) {
+    if (!PyArg_ParseTuple(args, "O!", &FigureCanvasType, &figureCanvasPyObject)) {
         return -1;
     }
 
@@ -365,7 +377,7 @@ FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
     [sFigureManagerHashTable addObject:self->object];
 
     END_OBJC_ENTRY
-    return 0;
+    return PyErr_Occurred() ? -1 : 0;
 }
 
 static PyObject *
@@ -399,8 +411,8 @@ FigureManager__close_and_clear_window_impl(FigureManager *self)
     if (self->object) {
         [sFigureManagerHashTable removeObject:self->object];
 
-        [self->object close];
         [self->object setPyObject:NULL];
+        [self->object close];
         self->object = nil;
 
         [[MPLEventLoop sharedInstance] checkStopCondition];
@@ -490,7 +502,7 @@ FigureManager_full_screen_toggle(FigureManager *self)
 
 static PyTypeObject FigureManagerType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "matplotlib.backends._macosx.FigureManager",
+    .tp_name = "matplotlib.backends._macos.FigureManager",
     .tp_doc = PyDoc_STR("A FigureManager object wraps a "
                         "MPLFigureManager Objective-C object."),
     .tp_basicsize = sizeof(FigureManager),
@@ -554,13 +566,13 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
 {
     BEGIN_OBJC_ENTRY
 
-    FigureCanvas *canvas;
-
-    if (!PyArg_ParseTuple(args, "O!", &FigureCanvasType, &canvas)) {
+    PyObject *figureCanvasPyObject;
+    if (!PyArg_ParseTuple(args, "O!", &FigureCanvasType, &figureCanvasPyObject)) {
         return -1;
     }
 
-    MPLFigureCanvas *figureCanvas = canvas->object;
+    MPLFigureCanvas *figureCanvas = ((FigureCanvas *)figureCanvasPyObject)->object;
+
     if (!figureCanvas) {
         PyErr_SetString(PyExc_RuntimeError, "MPLFigureCanvas is NULL");
         return -1;
@@ -578,7 +590,7 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
     [[figureCanvas manager] installToolbar:toolbar];
 
     END_OBJC_ENTRY
-    return 0;
+    return PyErr_Occurred() ? -1 : 0;
 }
 
 static void
@@ -604,7 +616,12 @@ NavigationToolbar2_add_item(NavigationToolbar2 *self, PyObject *args)
     BEGIN_OBJC_ENTRY
 
     MPLStringArray *strings = MPLGetStringArrayWithPySequence(args);
-    if ([strings count] != 4) return NULL;
+    if (!strings) return NULL;
+
+    if ([strings count] != 4) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid arguments to add_item");
+        return NULL;
+    }
 
     [self->object addItemWithTitle: [strings objectAtIndex:0]
                            tooltip: [strings objectAtIndex:1]
@@ -659,7 +676,7 @@ NavigationToolbar2_set_message(NavigationToolbar2 *self, PyObject *args)
 
 static PyTypeObject NavigationToolbar2Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "matplotlib.backends._macosx.NavigationToolbar2",
+    .tp_name = "matplotlib.backends._macos.NavigationToolbar2",
     .tp_doc = PyDoc_STR("NavigationToolbar2"),
     .tp_basicsize = sizeof(NavigationToolbar2),
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
@@ -787,7 +804,7 @@ Timer__update_single_shot(Timer *self, PyObject *args)
 
 static PyTypeObject TimerType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "matplotlib.backends._macosx.Timer",
+    .tp_name = "matplotlib.backends._macos.Timer",
     .tp_doc = PyDoc_STR("A Timer object that contains an NSTimer that gets added to "
                         "the event loop when started."),
     .tp_basicsize = sizeof(Timer),
@@ -936,10 +953,10 @@ _macos__init(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
 
-    PyObject *imagesDict;
-    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesDict)) { return NULL; }
+    PyObject *imagesPyDict;
+    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesPyDict)) { return NULL; }
 
-    NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesDict);
+    NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesPyDict);
     if (!imagesDictionary) { return NULL; }
 
     static dispatch_once_t onceToken;
@@ -974,28 +991,29 @@ _macos_is_initialized(PyObject *self)
     }
 }
 
+
 static PyObject *
 _macos_wake_on_fd_write(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     int fd;
     if (!PyArg_ParseTuple(args, "i", &fd)) { return NULL; }
-
+    
     dispatch_source_t source = dispatch_source_create(
-        DISPATCH_SOURCE_TYPE_READ, fd, 0,
-        dispatch_get_main_queue()
-    );
-
+                                                      DISPATCH_SOURCE_TYPE_READ, fd, 0,
+                                                      dispatch_get_main_queue()
+                                                      );
+    
     dispatch_source_set_event_handler(source, ^{
         PyGILState_STATE gstate = PyGILState_Ensure();
         PyErr_CheckSignals();
         PyGILState_Release(gstate);
-
+        
         dispatch_source_cancel(source);
     });
-
+    
     dispatch_resume(source);
-
+    
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -1004,7 +1022,7 @@ static PyObject *
 _macos_stop(PyObject *self, PyObject *unused)
 {
     BEGIN_OBJC_ENTRY
-    [[MPLEventLoop sharedInstance] stop];
+    sStopWithEvent();
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
