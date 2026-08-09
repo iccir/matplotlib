@@ -1,7 +1,5 @@
-#define PY_SSIZE_T_CLEAN
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
-#import <Python.h>
 #import "MPLUtils.h"
 #import "MPLAppDelegate.h"
 #import "MPLEventLoop.h"
@@ -10,6 +8,9 @@
 #import "MPLNavigationToolbar2.h"
 #import "MPLSubplotTool.h"
 #import "MPLTimer.h"
+
+#define PY_SSIZE_T_CLEAN
+#import <Python.h>
 
 #if !__has_feature(objc_arc_fields)
 #error "The macOS backend requires ARC C struct fields support (objc_arc_fields)."
