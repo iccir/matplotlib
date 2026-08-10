@@ -1647,7 +1647,7 @@ def _is_non_interactive_terminal_ipython(ip):
 
 
 @contextmanager
-def _allow_interrupt(prepare_notifier, handle_sigint):
+def _allow_interrupt(prepare_notifier, handle_sigint, cleanup=None):
     """
     A context manager that allows terminating a plot by sending a SIGINT.  It
     is necessary because the running backend prevents the Python interpreter
@@ -1673,7 +1673,8 @@ def _allow_interrupt(prepare_notifier, handle_sigint):
     Parameters
     ----------
     prepare_notifier : Callable[[socket.socket], object]
-    handle_sigint : Callable[[object], object]
+    handle_sigint : Callable[[object], None]
+    cleanup: Callable[[], None] | None
     """
 
     old_sigint_handler = signal.getsignal(signal.SIGINT)
@@ -1698,6 +1699,8 @@ def _allow_interrupt(prepare_notifier, handle_sigint):
     try:
         yield
     finally:
+        if cleanup is not None:
+            cleanup()
         wsock.close()
         rsock.close()
         signal.set_wakeup_fd(old_wakeup_fd)

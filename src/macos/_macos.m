@@ -994,27 +994,14 @@ _macos_is_initialized(PyObject *self)
 
 
 static PyObject *
-_macos_wake_on_fd_write(PyObject *unused, PyObject *args)
+_macos_update_check_signals_fd(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     int fd;
     if (!PyArg_ParseTuple(args, "i", &fd)) { return NULL; }
-    
-    dispatch_source_t source = dispatch_source_create(
-        DISPATCH_SOURCE_TYPE_READ, fd, 0,
-        dispatch_get_main_queue()
-    );
-    
-    dispatch_source_set_event_handler(source, ^{
-        PyGILState_STATE gstate = PyGILState_Ensure();
-        PyErr_CheckSignals();
-        PyGILState_Release(gstate);
-        
-        dispatch_source_cancel(source);
-    });
-    
-    dispatch_resume(source);
-    
+
+    [[MPLEventLoop sharedInstance] updateCheckSignalsFileDescriptor:fd];
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -1152,12 +1139,13 @@ static struct PyModuleDef _macos_moduledef = {
          METH_NOARGS,
          PyDoc_STR(
             "Return whether _init() has been called .")},
-        {"wake_on_fd_write",
-         (PyCFunction)_macos_wake_on_fd_write,
+        {"update_check_signals_fd",
+         (PyCFunction)_macos_update_check_signals_fd,
          METH_VARARGS,
          PyDoc_STR(
             "Arrange for Python to invoke its signal handlers when (any) data is\n"
-            "written on the file descriptor given as argument.")},
+            "written on the file descriptor given as the argument. A value of -1\n"
+            "indicates that the previous file descriptor will be closed.")},
         {"stop",
          (PyCFunction)_macos_stop,
          METH_VARARGS,

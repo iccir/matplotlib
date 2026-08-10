@@ -23,6 +23,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) wrapModalLoopWithLabel:(NSString *)label callback:(void (^)(void))callback;
 
+- (void) updateCheckSignalsFileDescriptor:(int)fd;
+
 @end
 
 NS_ASSUME_NONNULL_END

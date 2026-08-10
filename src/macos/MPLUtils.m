@@ -77,6 +77,14 @@ void MPLCallMethod(MPLPyObjectRef pyObject, const char *name, char const *format
 }
 
 
+void MPLCheckSignals(void)
+{
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyErr_CheckSignals();
+    PyGILState_Release(gstate);
+}
+
+
 NSString *MPLGetStringWithPyString(MPLPyObjectRef pyString)
 {
     if (!pyString) {

@@ -46,6 +46,12 @@ extern void MPLCallMethod(
 
 
 /*
+    Acquire the GIL and then call PyErr_CheckSignals()
+*/
+extern void MPLCheckSignals(void);
+
+
+/*
     Converts a Python str into an NSString.
     Returns nil and raises a Python exception if the str could not be converted.
 */

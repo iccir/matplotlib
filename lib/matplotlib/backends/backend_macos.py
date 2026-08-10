@@ -15,13 +15,16 @@ from matplotlib.backend_bases import (
 def _allow_interrupt_macos():
     """A context manager that allows terminating a plot by sending a SIGINT."""
     return _allow_interrupt(
-        lambda rsock: _macos.wake_on_fd_write(rsock.fileno()), _macos.stop)
+        lambda rsock: _macos.update_check_signals_fd(rsock.fileno()),
+        lambda: _macos.stop,
+        lambda: _macos.update_check_signals_fd(-1))
 
 
 @functools.lru_cache
 def _init_macos():
     data_path = cbook._get_data_path("images")
     _macos._init({"matplotlib": str(data_path / "matplotlib.pdf")})
+
 
 class TimerMac(_macos.Timer, TimerBase):
     """Subclass of `.TimerBase` using libdispatch timer sources."""

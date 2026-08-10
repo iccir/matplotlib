@@ -26,6 +26,8 @@ typedef NS_ENUM(NSInteger, LoopType) {
 
     // Block for use with -runUntilStopCondition: / -checkStopCondition
     BOOL (^_stopCondition)(void);
+
+    dispatch_source_t _checkSignalsDispatchSource;
 }
 
 
@@ -237,6 +239,36 @@ typedef NS_ENUM(NSInteger, LoopType) {
 - (void) wrapModalLoopWithLabel:(NSString *)label callback:(void (^)(void))callback
 {
     [self _wrapLoopWithType:LoopTypeModal label:label callback:callback];
+}
+
+
+- (void) updateCheckSignalsFileDescriptor:(int)fd
+{
+    if (_checkSignalsDispatchSource) {
+        dispatch_cancel(_checkSignalsDispatchSource);
+        _checkSignalsDispatchSource = nil;
+    }
+
+    if (fd < 0) return;
+
+    int duplicatedFD = dup(fd);
+    if (duplicatedFD < 0) return;
+
+    dispatch_source_t source = dispatch_source_create(
+        DISPATCH_SOURCE_TYPE_READ, duplicatedFD, 0,
+        dispatch_get_main_queue()
+    );
+
+    dispatch_source_set_cancel_handler(source, ^{
+        close(duplicatedFD);
+    });
+
+    dispatch_source_set_event_handler(source, ^{
+        MPLCheckSignals();
+    });
+
+    _checkSignalsDispatchSource = source;
+    dispatch_resume(_checkSignalsDispatchSource);
 }
 
 
