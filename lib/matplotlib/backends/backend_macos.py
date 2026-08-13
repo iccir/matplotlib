@@ -23,7 +23,9 @@ def _allow_interrupt_macos():
 @functools.lru_cache
 def _init_macos():
     data_path = cbook._get_data_path("images")
-    _macos._init({"matplotlib": str(data_path / "matplotlib.pdf")})
+    images = {path.stem: str(path) for path in data_path.glob("macos_*.png")}
+    use_dark_appicon = mpl.rcParams["macos.app_icon"] == "dark"
+    _macos._init(images, use_dark_appicon)
 
 
 class TimerMac(_macos.Timer, TimerBase):

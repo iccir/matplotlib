@@ -15,10 +15,13 @@
 
 #pragma mark - Lifecycle
 
-- (instancetype) initWithImageDictionary:(MPLStringDictionary *)imageDictionary
+- (instancetype) initWithImageDictionary: (MPLStringDictionary *) imageDictionary
+                             useDarkIcon: (BOOL) useDarkIcon
 {
     if ((self = [super init])) {
         _imageDictionary = imageDictionary;
+        _useDarkIcon = useDarkIcon;
+
         MPLLog("[Lifecycle] MPLAppDelegate<%p> init", self);
     }
 
@@ -133,12 +136,92 @@
 
 - (void) _buildAppIcon
 {
-    NSString *imagePath = [_imageDictionary objectForKey:@"matplotlib"];
-    NSURL *imageURL = imagePath ? [NSURL fileURLWithPath:imagePath] : nil;
+    MPLStringDictionary *imageDictionary = _imageDictionary;
+    NSImage *shadowImage;
+    NSImage *maskImage;
+    NSImage *darkBackgroundImage;
 
-    if (imageURL) {
-        NSImage *image = [[NSImage alloc] initWithContentsOfURL:imageURL];
-        [NSApp setApplicationIconImage:image];
+    BOOL useDarkIcon = _useDarkIcon;
+
+    __auto_type getImage = ^(NSString *key) {
+        NSString *path = [imageDictionary objectForKey:key];
+        return path ? [[NSImage alloc] initWithContentsOfFile:path] : nil;
+    };
+
+    if (@available(macOS 27.0, *)) {
+        darkBackgroundImage = getImage(@"macos_appicon_bgdark27");
+    } else if (@available(macOS 26.0, *)) {
+        darkBackgroundImage = getImage(@"macos_appicon_bgdark26");
+    }
+
+    if (@available(macOS 26.0, *)) {
+        shadowImage = getImage(@"macos_appicon_shadow26");
+        maskImage   = getImage(@"macos_appicon_mask26");
+    } else {
+        shadowImage = getImage(@"macos_appicon_shadow11");
+        maskImage   = getImage(@"macos_appicon_mask11");
+    }
+
+    NSImage *contentImage = _useDarkIcon ?
+        getImage(@"macos_appicon_dark") :
+        getImage(@"macos_appicon_light");
+
+    if (!maskImage || !shadowImage || !contentImage) return;
+
+    // Use standard size of 256 physical pixels (128x128 @2x)
+    CGSize iconSize = CGSizeMake(256, 256);
+    CGImageRef iconCGImage = MPLCreateImage(iconSize, 1, ^(CGContextRef context) {
+        CGRect iconBounds = CGRectMake(0, 0, iconSize.width, iconSize.height);
+
+        __auto_type getCGImage = ^(NSImage *nsImage) {
+            CGRect proposedRect = iconBounds;
+            return [nsImage CGImageForProposedRect: &proposedRect
+                                           context: [NSGraphicsContext currentContext]
+                                             hints: nil];
+        };
+
+        __auto_type getFrame = ^(CGImageRef image) {
+            CGSize size = CGSizeMake(CGImageGetWidth(image), CGImageGetHeight(image));
+            return MPLGetCenteredRect(iconBounds, size);
+        };
+
+        CGImageRef maskCGImage    = MPLCopyGrayscaleNonAlphaImage(getCGImage(maskImage));
+        CGImageRef shadowCGImage  = getCGImage(shadowImage);
+        CGImageRef contentCGImage = getCGImage(contentImage);
+        CGImageRef darkBGCGImage  = getCGImage(darkBackgroundImage);
+
+        // MPLCreateImage() uses an upper-left-origin to match other graphics libraries.
+        // Reset to lower-left-origin coordinate system since we are drawing images,
+        // as CGContextDrawImage() translates the CTM by the image height and flips
+        // prior to drawing.
+        CGContextTranslateCTM(context, 0, iconSize.height);
+        CGContextScaleCTM(context, 1, -1);
+
+        CGContextDrawImage(context, getFrame(shadowCGImage), shadowCGImage);
+        CGContextClipToMask(context, getFrame(maskCGImage), maskCGImage);
+
+        if (useDarkIcon) {
+            if (darkBackgroundImage) {
+                CGContextDrawImage(context, getFrame(darkBGCGImage), darkBGCGImage);
+            } else {
+                NSGradient *gradient = [[NSGradient alloc] initWithColors:@[
+                    MPLGetRGBColor(0x303030, 1.0),
+                    MPLGetRGBColor(0x181818, 1.0)
+                ]];
+
+                [gradient drawInRect:CGRectMake(0, 0, 256, 256) angle:-90];
+            }
+        }
+
+        CGContextDrawImage(context, getFrame(contentCGImage), contentCGImage);
+
+        CGImageRelease(maskCGImage);
+    });
+
+    if (iconCGImage) {
+        NSImage *iconImage = [[NSImage alloc] initWithCGImage:iconCGImage size:iconSize];
+        [NSApp setApplicationIconImage:iconImage];
+        CGImageRelease(iconCGImage);
     }
 }
 

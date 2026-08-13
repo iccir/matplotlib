@@ -410,6 +410,7 @@ type RcKeyType = Literal[
     "lines.scale_dashes",
     "lines.solid_capstyle",
     "lines.solid_joinstyle",
+    "macos.app_icon",
     "macos.appearance",
     "macos.window_mode",
     "macosx.window_mode",
