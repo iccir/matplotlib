@@ -39,10 +39,16 @@ extern os_log_t MPLGetLogger(void);
     discard the result, print any exception.
 */
 extern void MPLCallMethod(
-    MPLPyObjectRef pyObject,
+    MPLPyObjectRef _Nullable pyObject,
     const char *name,
     char const * _Nullable format, ...
 );
+
+
+/*
+    Acquire the GIL and then call PyErr_CheckSignals()
+*/
+extern void MPLCheckSignals(void);
 
 
 /*
@@ -96,6 +102,20 @@ extern NSData * _Nullable MPLGetBufferWithPyObject(
 
 
 /*
+    Returns a rectangle of size 'size' centered in 'bounds'.
+    For example: { 60, 40 } centered in { 20, 20, 80, 80 } is { 30, 40, 60, 40 }
+*/
+extern CGRect MPLGetCenteredRect(CGRect bounds, CGSize size);
+
+
+/*
+    Returns an NSColor in the sRGB color space.
+    For example: 'MPLGetRGBColor(0xFF0000, 1.0)' is opaque red.
+*/
+extern NSColor *MPLGetRGBColor(int rgb, CGFloat alpha);
+
+
+/*
     Create a sRGB+alpha image of the specified width, height, and scale factor.
     (0, 0) corresponds to the upper-left corner.
 */
@@ -104,6 +124,12 @@ extern CGImageRef _Nullable MPLCreateImage(
     CGFloat scale,
     void (^callback)(CGContextRef)
 );
+
+
+/*
+    Copy a grayscale non-alpha version of inImage to use with CGContextClipToMask()
+*/
+extern CGImageRef _Nullable MPLCopyGrayscaleNonAlphaImage(CGImageRef _Nullable inImage);
 
 
 NS_ASSUME_NONNULL_END

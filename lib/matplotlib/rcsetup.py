@@ -1392,6 +1392,7 @@ _validators = {
     "savefig.directory":    _validate_pathlike,
     "savefig.transparent":  validate_bool,
 
+    "macos.app_icon":     ["light", "dark"],
     "macos.appearance":   ["system", "light", "dark"],
     "macos.window_mode":  ["system", "tab", "window"],
     "macosx.window_mode": ["system", "tab", "window"],
@@ -3430,8 +3431,16 @@ _DEFINITION = [
     ),
     _Subsection("macOS backend parameters"),
     _Param(
+        "macos.app_icon",
+        default="light",
+        type=Literal["light", "dark"],
+        validator=["light", "dark"],
+        description="Whether the application icon uses a light or dark style"
+    ),
+    _Param(
         "macos.appearance",
         default="system",
+        type=Literal["system", "light", "dark"],
         validator=["system", "light", "dark"],
         description="Whether windows and controls use a light or dark appearance. "
                     "'system' uses 'Appearance' from System Settings."
@@ -3439,6 +3448,7 @@ _DEFINITION = [
     _Param(
         "macos.window_mode",
         default="system",
+        type=Literal["system", "tab", "window"],
         validator=["system", "tab", "window"],
         description="How to open new figures (system, tab, window). "
                     "'system' uses 'Prefer tabs...' from System Settings."

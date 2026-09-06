@@ -12,21 +12,34 @@ from matplotlib.backend_bases import (
     MouseButton, TimerBase, _allow_interrupt, _Mode)
 
 
-class TimerMac(_macos.Timer, TimerBase):
-    """Subclass of `.TimerBase` using CFRunLoop timer events."""
-    # completely implemented at the C-level (in _macos.Timer)
-
-
 def _allow_interrupt_macos():
     """A context manager that allows terminating a plot by sending a SIGINT."""
     return _allow_interrupt(
-        lambda rsock: _macos.wake_on_fd_write(rsock.fileno()), _macos.stop)
+        lambda rsock: _macos.update_check_signals_fd(rsock.fileno()),
+        lambda _: _macos.stop(),
+        lambda: _macos.update_check_signals_fd(-1))
 
 
 @functools.lru_cache
 def _init_macos():
     data_path = cbook._get_data_path("images")
-    _macos._init({"matplotlib": str(data_path / "matplotlib.pdf")})
+    images = {path.stem: str(path) for path in data_path.glob("macos_*.png")}
+    use_dark_appicon = mpl.rcParams["macos.app_icon"] == "dark"
+    _macos._init(images, use_dark_appicon)
+
+
+class TimerMac(_macos.Timer, TimerBase):
+    """Subclass of `.TimerBase` using libdispatch timer sources."""
+
+    def __init__(self, *args, **kwargs):
+        _macos.Timer.__init__(self)
+        TimerBase.__init__(self, *args, **kwargs)
+
+    def _timer_set_interval(self):
+        self._update_interval(self._interval)
+
+    def _timer_set_single_shot(self):
+        self._update_single_shot(self._single)
 
 
 class FigureCanvasMac(_macos.FigureCanvas, FigureCanvasBase):
@@ -159,12 +172,22 @@ class NavigationToolbar2Mac(_macos.NavigationToolbar2, NavigationToolbar2):
                 image_path = str(data_path / image_name) + ".pdf"
                 self.add_item(text, tooltip_text, image_path, callback)
         NavigationToolbar2.__init__(self, canvas)
+        self._subplot_tool = None
 
     def draw_rubberband(self, event, x0, y0, x1, y1):
         self.canvas.set_rubberband(int(x0), int(y0), int(x1), int(y1))
 
     def remove_rubberband(self):
         self.canvas.remove_rubberband()
+
+    def configure_subplots(self):
+        if self._subplot_tool is None:
+            self._subplot_tool = SubplotToolMac(self.canvas.figure)
+            self.canvas.mpl_connect(
+                "close_event", lambda e: self._subplot_tool.close())
+        self._subplot_tool.update_defaults_from_figure()
+        self._subplot_tool.show()
+        return None
 
     def _update_buttons_checked(self):
         mode_names = {_Mode.PAN: "pan", _Mode.ZOOM: "zoom"}
@@ -237,6 +260,35 @@ class FigureManagerMac(_macos.FigureManager, FigureManagerBase):
             self._shown = True
         if mpl.rcParams["figure.raise_window"]:
             self._raise()
+
+
+class SubplotToolMac(_macos.SubplotTool):
+
+    def __init__(self, targetfig):
+        _macos.SubplotTool.__init__(self, targetfig.canvas.manager)
+        self._figure = targetfig
+        self.update_defaults_from_figure()
+
+    def _get_params_from_figure(self):
+        return [getattr(self._figure.subplotpars, name) for name in [
+                "left", "bottom", "right", "top", "wspace", "hspace"]]
+
+    def update_defaults_from_figure(self):
+        self._defaults = self._get_params_from_figure()
+        self._send_params_to_ui(*self._defaults)
+
+    def _send_params_to_figure(self, *args):
+        self._figure.subplots_adjust(*args)
+        self._figure.canvas.draw_idle()
+
+    def _handle_reset_button(self):
+        self._send_params_to_figure(*self._defaults)
+        self._send_params_to_ui(*self._defaults)
+
+    def _handle_tight_button(self):
+        self._figure.tight_layout()
+        self._figure.canvas.draw_idle()
+        self._send_params_to_ui(*self._get_params_from_figure())
 
 
 @_Backend.export

@@ -5,9 +5,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MPLAppDelegate : NSObject <NSApplicationDelegate>
 
-- (instancetype) initWithImageDictionary:(MPLStringDictionary *)imageDictionary;
+- (instancetype) initWithImageDictionary: (MPLStringDictionary *) imageDictionary
+                             useDarkIcon: (BOOL) useDarkIcon;
 
 @property (nonatomic, readonly) MPLStringDictionary *imageDictionary;
+@property (nonatomic, readonly) BOOL useDarkIcon;
 
 @end
 

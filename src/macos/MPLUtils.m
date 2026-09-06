@@ -28,7 +28,7 @@ os_log_t MPLGetLogger(void)
 
 #pragma mark - Python Utility Functions
 
-void MPLCallMethod(MPLPyObjectRef pyObject, const char *name, char const *format, ...)
+void MPLCallMethod(MPLPyObjectRef _Nullable pyObject, const char *name, char const *format, ...)
 {
     // It is possible for Obj-C objects to momentarily outlive their paired Python
     // counterparts, especially when dealing with AppKit objects. Hence, allow
@@ -77,7 +77,15 @@ void MPLCallMethod(MPLPyObjectRef pyObject, const char *name, char const *format
 }
 
 
-NSString *MPLGetStringWithPyString(MPLPyObjectRef pyString)
+void MPLCheckSignals(void)
+{
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyErr_CheckSignals();
+    PyGILState_Release(gstate);
+}
+
+
+NSString * _Nullable MPLGetStringWithPyString(MPLPyObjectRef _Nullable pyString)
 {
     if (!pyString) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
@@ -114,7 +122,7 @@ NSString *MPLGetStringWithPyString(MPLPyObjectRef pyString)
 }
 
 
-MPLStringArray *MPLGetStringArrayWithPySequence(MPLPyObjectRef pySequence)
+MPLStringArray * _Nullable MPLGetStringArrayWithPySequence(MPLPyObjectRef _Nullable pySequence)
 {
     if (!pySequence) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
@@ -150,7 +158,7 @@ MPLStringArray *MPLGetStringArrayWithPySequence(MPLPyObjectRef pySequence)
 }
 
 
-NSString *MPLGetStringWithPySequence(MPLPyObjectRef _Nullable pySequence)
+NSString * _Nullable MPLGetStringWithPySequence(MPLPyObjectRef _Nullable pySequence)
 {
     MPLStringArray *array = MPLGetStringArrayWithPySequence(pySequence);
 
@@ -163,7 +171,7 @@ NSString *MPLGetStringWithPySequence(MPLPyObjectRef _Nullable pySequence)
 }
 
 
-MPLStringDictionary *MPLGetStringDictionaryWithPyDict(MPLPyObjectRef dict)
+MPLStringDictionary * _Nullable MPLGetStringDictionaryWithPyDict(MPLPyObjectRef _Nullable dict)
 {
     if (!dict) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
@@ -240,7 +248,28 @@ NSData * _Nullable MPLGetBufferWithPyObject(
 
 #pragma mark - Graphics Utility Functions
 
-CGImageRef sCreateImage(
+CGRect MPLGetCenteredRect(CGRect bounds, CGSize size)
+{
+    return CGRectMake(
+        bounds.origin.x + ((bounds.size.width  - size.width)  / 2.0),
+        bounds.origin.y + ((bounds.size.height - size.height) / 2.0),
+        size.width,
+        size.height
+    );
+}
+
+
+NSColor *MPLGetRGBColor(int rgb, CGFloat alpha)
+{
+    float r = (((rgb & 0xFF0000) >> 16) / 255.0);
+    float g = (((rgb & 0x00FF00) >>  8) / 255.0);
+    float b = (((rgb & 0x0000FF) >>  0) / 255.0);
+
+    return [NSColor colorWithSRGBRed:r green:g blue:b alpha:alpha];
+}
+
+
+static CGImageRef _Nullable sCreateImage(
     CGSize size, CGFloat scale, BOOL flipped,
     CFStringRef colorSpaceName, size_t componentCount, CGBitmapInfo bitmapInfo,
     void (^callback)(CGContextRef)
@@ -284,8 +313,22 @@ CGImageRef sCreateImage(
 }
 
 
-CGImageRef MPLCreateImage(CGSize size, CGFloat scale, void (^callback)(CGContextRef))
+CGImageRef _Nullable MPLCreateImage(CGSize size, CGFloat scale, void (^callback)(CGContextRef))
 {
     CGBitmapInfo bitmapInfo = 0 | kCGImageAlphaPremultipliedFirst | kCGImageByteOrder32Little;
     return sCreateImage(size, scale, YES, kCGColorSpaceSRGB, 4, bitmapInfo, callback);
+}
+
+
+_Nullable CGImageRef MPLCopyGrayscaleNonAlphaImage(_Nullable CGImageRef inImage)
+{
+    if (!inImage) return NULL;
+
+    CGSize size = CGSizeMake(CGImageGetWidth(inImage), CGImageGetHeight(inImage));
+    CFStringRef colorSpaceName = kCGColorSpaceGenericGrayGamma2_2;
+    CGBitmapInfo bitmapInfo = 0 | kCGImageAlphaNone;
+
+    return sCreateImage(size, 1, NO, colorSpaceName, 1, bitmapInfo, ^(CGContextRef context) {
+        CGContextDrawImage(context, CGRectMake(0, 0, size.width, size.height), inImage);
+    });
 }
