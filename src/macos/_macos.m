@@ -936,7 +936,8 @@ _macos__init(PyObject *unused, PyObject *args)
     BEGIN_OBJC_ENTRY
 
     PyObject *imagesPyDict;
-    if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &imagesPyDict)) { return NULL; }
+    int useDarkIcon;
+    if (!PyArg_ParseTuple(args, "O!i", &PyDict_Type, &imagesPyDict, &useDarkIcon)) { return NULL; }
 
     NSDictionary *imagesDictionary = MPLGetStringDictionaryWithPyDict(imagesPyDict);
     if (!imagesDictionary) { return NULL; }
@@ -948,7 +949,9 @@ _macos__init(PyObject *unused, PyObject *args)
         }
 
         if (![NSApp delegate]) {
-            sAppDelegate = [[MPLAppDelegate alloc] initWithImageDictionary:imagesDictionary];
+            sAppDelegate = [[MPLAppDelegate alloc] initWithImageDictionary: imagesDictionary
+                                                               useDarkIcon: (useDarkIcon > 0)];
+
             [NSApp setDelegate:sAppDelegate];
         }
 

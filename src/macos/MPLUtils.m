@@ -305,8 +305,22 @@ static CGImageRef _Nullable sCreateImage(
 }
 
 
-CGImageRef MPLCreateImage(CGSize size, CGFloat scale, void (^callback)(CGContextRef))
+CGImageRef _Nullable MPLCreateImage(CGSize size, CGFloat scale, void (^callback)(CGContextRef))
 {
     CGBitmapInfo bitmapInfo = 0 | kCGImageAlphaPremultipliedFirst | kCGImageByteOrder32Little;
     return sCreateImage(size, scale, YES, kCGColorSpaceSRGB, 4, bitmapInfo, callback);
+}
+
+
+_Nullable CGImageRef MPLCopyGrayscaleNonAlphaImage(_Nullable CGImageRef inImage)
+{
+    if (!inImage) return NULL;
+
+    CGSize size = CGSizeMake(CGImageGetWidth(inImage), CGImageGetHeight(inImage));
+    CFStringRef colorSpaceName = kCGColorSpaceGenericGrayGamma2_2;
+    CGBitmapInfo bitmapInfo = 0 | kCGImageAlphaNone;
+
+    return sCreateImage(size, 1, NO, colorSpaceName, 1, bitmapInfo, ^(CGContextRef context) {
+        CGContextDrawImage(context, CGRectMake(0, 0, size.width, size.height), inImage);
+    });
 }

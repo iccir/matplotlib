@@ -1392,6 +1392,7 @@ _validators = {
     "savefig.directory":    _validate_pathlike,
     "savefig.transparent":  validate_bool,
 
+    "macos.app_icon":     ["light", "dark"],
     "macos.appearance":   ["system", "light", "dark"],
     "macos.window_mode":  ["system", "tab", "window"],
     "macosx.window_mode": ["system", "tab", "window"],
@@ -3429,6 +3430,13 @@ _DEFINITION = [
         description="orientation of saved figure, for PostScript output only"
     ),
     _Subsection("macOS backend parameters"),
+    _Param(
+        "macos.app_icon",
+        default="light",
+        type=Literal["light", "dark"],
+        validator=["light", "dark"],
+        description="Whether the application icon uses a light or dark style"
+    ),
     _Param(
         "macos.appearance",
         default="system",

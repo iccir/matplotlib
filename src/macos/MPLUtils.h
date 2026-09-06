@@ -120,4 +120,10 @@ extern CGImageRef _Nullable MPLCreateImage(
 );
 
 
+/*
+    Copy a grayscale non-alpha version of inImage to use with CGContextClipToMask()
+*/
+extern CGImageRef _Nullable MPLCopyGrayscaleNonAlphaImage(CGImageRef _Nullable inImage);
+
+
 NS_ASSUME_NONNULL_END
