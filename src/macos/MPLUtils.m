@@ -240,7 +240,28 @@ NSData * _Nullable MPLGetBufferWithPyObject(
 
 #pragma mark - Graphics Utility Functions
 
-CGImageRef sCreateImage(
+CGRect MPLGetCenteredRect(CGRect bounds, CGSize size)
+{
+    return CGRectMake(
+        bounds.origin.x + ((bounds.size.width  - size.width)  / 2.0),
+        bounds.origin.y + ((bounds.size.height - size.height) / 2.0),
+        size.width,
+        size.height
+    );
+}
+
+
+NSColor *MPLGetRGBColor(int rgb, CGFloat alpha)
+{
+    float r = (((rgb & 0xFF0000) >> 16) / 255.0);
+    float g = (((rgb & 0x00FF00) >>  8) / 255.0);
+    float b = (((rgb & 0x0000FF) >>  0) / 255.0);
+
+    return [NSColor colorWithSRGBRed:r green:g blue:b alpha:alpha];
+}
+
+
+static CGImageRef _Nullable sCreateImage(
     CGSize size, CGFloat scale, BOOL flipped,
     CFStringRef colorSpaceName, size_t componentCount, CGBitmapInfo bitmapInfo,
     void (^callback)(CGContextRef)

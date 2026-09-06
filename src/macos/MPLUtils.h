@@ -96,6 +96,20 @@ extern NSData * _Nullable MPLGetBufferWithPyObject(
 
 
 /*
+    Returns a rectangle of size 'size' centered in 'bounds'.
+    For example: { 60, 40 } centered in { 20, 20, 80, 80 } is { 30, 40, 60, 40 }
+*/
+extern CGRect MPLGetCenteredRect(CGRect bounds, CGSize size);
+
+
+/*
+    Returns an NSColor in the sRGB color space.
+    For example: 'MPLGetRGBColor(0xFF0000, 1.0)' is opaque red.
+*/
+extern NSColor *MPLGetRGBColor(int rgb, CGFloat alpha);
+
+
+/*
     Create a sRGB+alpha image of the specified width, height, and scale factor.
     (0, 0) corresponds to the upper-left corner.
 */
