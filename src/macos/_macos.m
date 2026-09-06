@@ -2,6 +2,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import "MPLUtils.h"
 #import "MPLAppDelegate.h"
+#import "MPLEventLoop.h"
 #import "MPLFigureCanvas.h"
 #import "MPLFigureManager.h"
 #import "MPLNavigationToolbar2.h"
@@ -12,9 +13,6 @@
 #if !__has_feature(objc_arc_fields)
 #error "The macOS backend requires ARC C struct fields support (objc_arc_fields)."
 #endif
-
-/* Various NSApplicationDefined event subtypes */
-#define STOP_EVENT_LOOP 2
 
 
 /* When calling into Objective-C from Python, wrap the calls with
@@ -43,11 +41,10 @@
     }
 
 
-/* Variable for our delegate since it needs a +1 reference count. */
+// Variable for our delegate since it needs a +1 reference count.
 static id<NSApplicationDelegate> sAppDelegate = nil;
 
-/* Variables to keep track of state and window count for show() */
-static BOOL sIsRunningFromShow = NO;
+// Variables to keep track of state and window count for show()
 static NSHashTable<MPLFigureManager *> *sFigureManagerHashTable = nil;
 
 // Set to YES in _init() if initialization was successful
@@ -63,91 +60,23 @@ static void sErrSetException(NSException *exception)
     PyErr_SetString(PyExc_RuntimeError, cString);
 }
 
-
-// Old implementation, goes away with MPLEventLoop PR
-static void sStopWithEvent(void)
+// Signal handler for SIGINT, set in wait_for_stdin() below
+static void
+sHandleSigint(int signal)
 {
-    [NSApp stop: nil];
-    // Post an event to trigger the actual stopping.
-    // +[NSEvent otherEventWithType:...] is declared nullable but will not return
-    // nil for these constant, valid arguments; guard defensively anyway.
-    NSEvent* event = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
-                                        location: NSZeroPoint
-                                   modifierFlags: 0
-                                       timestamp: 0
-                                    windowNumber: 0
-                                         context: nil
-                                         subtype: 0
-                                           data1: 0
-                                           data2: 0];
-    if (event) {
-        [NSApp postEvent: event atStart: YES];
-    }
+    MPLLog("[EventLoop] received SIGINT");
+    [[MPLEventLoop sharedInstance] stop];
 }
 
-
-// Old implementation, goes away with MPLEventLoop PR
-static void sHandleSigint(int signal)
-{
-    sStopWithEvent();
-}
-
-// Old implementation, goes away with MPLEventLoop PR
-static void flushEvents(void)
-{
-    while (true) {
-        @autoreleasepool {
-            NSEvent* event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                                untilDate: [NSDate distantPast]
-                                                   inMode: NSDefaultRunLoopMode
-                                                  dequeue: YES];
-            if (!event) {
-                break;
-            }
-            [NSApp sendEvent:event];
-        }
-    }
-}
-
-// Old implementation, goes away with MPLEventLoop PR
-static int sInputHook(void)
+static int
+sInputHook(void)
 {
     BEGIN_OBJC_ENTRY
-
-    // Short circuit if no windows are active
-    // Rely on Python's input handling to manage CPU usage
-    // This queries the NSApp, rather than using our FigureWindowCount because that is decremented when events still
-    // need to be processed to properly close the windows.
-    @autoreleasepool {
-        if (![[NSApp windows] count]) {
-            flushEvents();
-            return 1;
-        }
-    }
 
     // Set up a SIGINT handler to interrupt the event loop if ctrl+c comes in too
     PyOS_sighandler_t originalSigintHandler = PyOS_setsig(SIGINT, sHandleSigint);
 
-    // Create an NSFileHandle for standard input
-    NSFileHandle *stdinHandle = [NSFileHandle fileHandleWithStandardInput];
-
-
-    // Register for data available notifications on standard input
-    id notificationID = [[NSNotificationCenter defaultCenter] addObserverForName: NSFileHandleDataAvailableNotification
-                                                                          object: stdinHandle
-                                                                           queue: [NSOperationQueue mainQueue] // Use the main queue
-                                                                      usingBlock: ^(NSNotification *notification) {sStopWithEvent();}
-    ];
-
-    // Wait in the background for anything that happens to stdin
-    [stdinHandle waitForDataInBackgroundAndNotify];
-
-    // Run the application's event loop, which will be interrupted on stdin or SIGINT
-    [NSApp run];
-
-    // Remove the input handler as an observer
-    [[NSNotificationCenter defaultCenter] removeObserver: notificationID];
-
+    [[MPLEventLoop sharedInstance] spinUntilStandardInput];
 
     // Restore the original SIGINT handler upon exiting the function
     PyOS_setsig(SIGINT, originalSigintHandler);
@@ -252,7 +181,7 @@ FigureCanvas_flush_events(FigureCanvas *self)
     // displaying the canvas if needed.
     Py_BEGIN_ALLOW_THREADS
 
-    flushEvents();
+    [[MPLEventLoop sharedInstance] spinUntilNoEvents];
 
     Py_END_ALLOW_THREADS
 
@@ -326,22 +255,13 @@ FigureCanvas__start_event_loop(FigureCanvas *self, PyObject *args, PyObject *key
         return NULL;
     }
 
-    Py_BEGIN_ALLOW_THREADS
-
-    NSDate *date =
-        (timeout > 0.0) ? [NSDate dateWithTimeIntervalSinceNow: timeout]
-                        : [NSDate distantFuture];
-    while (true) {
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                                untilDate: date
-                                                   inMode: NSDefaultRunLoopMode
-                                                  dequeue: YES];
-            if (!event || [event type]==NSEventTypeApplicationDefined) { break; }
-            [NSApp sendEvent: event];
-        }
+    if ([NSApp isRunning]) {
+        PyErr_SetString(PyExc_RuntimeError, "An event loop is already running");
+        return NULL;
     }
 
+    Py_BEGIN_ALLOW_THREADS
+    [[MPLEventLoop sharedInstance] runUntilTimeout:timeout];
     Py_END_ALLOW_THREADS
 
     END_OBJC_ENTRY
@@ -352,20 +272,7 @@ static PyObject *
 FigureCanvas_stop_event_loop(FigureCanvas *self)
 {
     BEGIN_OBJC_ENTRY
-    // +[NSEvent otherEventWithType:...] is declared nullable but will not return
-    // nil for these constant, valid arguments; guard defensively anyway.
-    NSEvent* event = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
-                                        location: NSZeroPoint
-                                   modifierFlags: 0
-                                       timestamp: 0.0
-                                    windowNumber: 0
-                                         context: nil
-                                         subtype: STOP_EVENT_LOOP
-                                           data1: 0
-                                           data2: 0];
-    if (event) {
-        [NSApp postEvent: event atStart: true];
-    }
+    [[MPLEventLoop sharedInstance] stop];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -507,9 +414,7 @@ FigureManager__close_and_clear_window_impl(FigureManager *self)
         [self->object close];
         self->object = nil;
 
-        if ([sFigureManagerHashTable count] == 0 && sIsRunningFromShow) {
-            [NSApp stop:nil];
-        }
+        [[MPLEventLoop sharedInstance] checkStopCondition];
     }
 }
 
@@ -974,25 +879,15 @@ _macos_is_initialized(PyObject *self)
 }
 
 
-static PyObject*
-_macos_wake_on_fd_write(PyObject* unused, PyObject* args)
+static PyObject *
+_macos_update_check_signals_fd(PyObject *unused, PyObject *args)
 {
     BEGIN_OBJC_ENTRY
     int fd;
     if (!PyArg_ParseTuple(args, "i", &fd)) { return NULL; }
-    NSFileHandle* fh = [[NSFileHandle alloc] initWithFileDescriptor: fd];
-    __block id notificationID = [[NSNotificationCenter defaultCenter]
-        addObserverForName: NSFileHandleDataAvailableNotification
-                    object: fh
-                     queue: nil
-                usingBlock: ^(NSNotification* note) {
-                    NSFileHandle* strongFileHandle __attribute__((unused)) = fh;
-                    PyGILState_STATE gstate = PyGILState_Ensure();
-                    PyErr_CheckSignals();
-                    PyGILState_Release(gstate);
-                    [[NSNotificationCenter defaultCenter] removeObserver:notificationID];
-                }];
-    [fh waitForDataInBackgroundAndNotify];
+
+    [[MPLEventLoop sharedInstance] updateCheckSignalsFileDescriptor:fd];
+
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -1001,7 +896,7 @@ static PyObject *
 _macos_stop(PyObject *self, PyObject *unused)
 {
     BEGIN_OBJC_ENTRY
-    sStopWithEvent();
+    [[MPLEventLoop sharedInstance] stop];
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
 }
@@ -1026,9 +921,9 @@ _macos_show(PyObject *self)
     }
 
     Py_BEGIN_ALLOW_THREADS
-    sIsRunningFromShow = YES;
-    [NSApp run];
-    sIsRunningFromShow = NO;
+    [[MPLEventLoop sharedInstance] runUntilStopCondition:^{
+        return (BOOL)([sFigureManagerHashTable count] == 0);
+    }];
     Py_END_ALLOW_THREADS
 
     END_OBJC_ENTRY
@@ -1056,7 +951,9 @@ _macos_choose_save_file(PyObject *unused, PyObject *args)
     [panel setNameFieldStringValue:defaultFilename];
 
     __block NSModalResponse modalResponse;
-    modalResponse = [panel runModal];
+    [[MPLEventLoop sharedInstance] wrapModalLoopWithLabel:@"choose_save_file" callback:^{
+        modalResponse = [panel runModal];
+    }];
 
     if (modalResponse == NSModalResponseOK) {
         NSString *filename = [[panel URL] path];
@@ -1127,12 +1024,13 @@ static struct PyModuleDef _macos_moduledef = {
          METH_NOARGS,
          PyDoc_STR(
             "Return whether _init() has been called .")},
-        {"wake_on_fd_write",
-         (PyCFunction)_macos_wake_on_fd_write,
+        {"update_check_signals_fd",
+         (PyCFunction)_macos_update_check_signals_fd,
          METH_VARARGS,
          PyDoc_STR(
             "Arrange for Python to invoke its signal handlers when (any) data is\n"
-            "written on the file descriptor given as argument.")},
+            "written on the file descriptor given as the argument. A value of -1\n"
+            "indicates that the previous file descriptor will be closed.")},
         {"stop",
          (PyCFunction)_macos_stop,
          METH_VARARGS,

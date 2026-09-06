@@ -39,10 +39,16 @@ extern os_log_t MPLGetLogger(void);
     discard the result, print any exception.
 */
 extern void MPLCallMethod(
-    MPLPyObjectRef pyObject,
+    MPLPyObjectRef _Nullable pyObject,
     const char *name,
     char const * _Nullable format, ...
 );
+
+
+/*
+    Acquire the GIL and then call PyErr_CheckSignals()
+*/
+extern void MPLCheckSignals(void);
 
 
 /*

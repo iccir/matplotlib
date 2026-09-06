@@ -20,7 +20,9 @@ class TimerMac(_macos.Timer, TimerBase):
 def _allow_interrupt_macos():
     """A context manager that allows terminating a plot by sending a SIGINT."""
     return _allow_interrupt(
-        lambda rsock: _macos.wake_on_fd_write(rsock.fileno()), _macos.stop)
+        lambda rsock: _macos.update_check_signals_fd(rsock.fileno()),
+        lambda _: _macos.stop(),
+        lambda: _macos.update_check_signals_fd(-1))
 
 
 @functools.lru_cache

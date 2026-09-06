@@ -28,7 +28,7 @@ os_log_t MPLGetLogger(void)
 
 #pragma mark - Python Utility Functions
 
-void MPLCallMethod(MPLPyObjectRef pyObject, const char *name, char const *format, ...)
+void MPLCallMethod(MPLPyObjectRef _Nullable pyObject, const char *name, char const *format, ...)
 {
     // It is possible for Obj-C objects to momentarily outlive their paired Python
     // counterparts, especially when dealing with AppKit objects. Hence, allow
@@ -77,7 +77,15 @@ void MPLCallMethod(MPLPyObjectRef pyObject, const char *name, char const *format
 }
 
 
-NSString *MPLGetStringWithPyString(MPLPyObjectRef pyString)
+void MPLCheckSignals(void)
+{
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyErr_CheckSignals();
+    PyGILState_Release(gstate);
+}
+
+
+NSString * _Nullable MPLGetStringWithPyString(MPLPyObjectRef _Nullable pyString)
 {
     if (!pyString) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
@@ -114,7 +122,7 @@ NSString *MPLGetStringWithPyString(MPLPyObjectRef pyString)
 }
 
 
-MPLStringArray *MPLGetStringArrayWithPySequence(MPLPyObjectRef pySequence)
+MPLStringArray * _Nullable MPLGetStringArrayWithPySequence(MPLPyObjectRef _Nullable pySequence)
 {
     if (!pySequence) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
@@ -150,7 +158,7 @@ MPLStringArray *MPLGetStringArrayWithPySequence(MPLPyObjectRef pySequence)
 }
 
 
-NSString *MPLGetStringWithPySequence(MPLPyObjectRef _Nullable pySequence)
+NSString * _Nullable MPLGetStringWithPySequence(MPLPyObjectRef _Nullable pySequence)
 {
     MPLStringArray *array = MPLGetStringArrayWithPySequence(pySequence);
 
@@ -163,7 +171,7 @@ NSString *MPLGetStringWithPySequence(MPLPyObjectRef _Nullable pySequence)
 }
 
 
-MPLStringDictionary *MPLGetStringDictionaryWithPyDict(MPLPyObjectRef dict)
+MPLStringDictionary * _Nullable MPLGetStringDictionaryWithPyDict(MPLPyObjectRef _Nullable dict)
 {
     if (!dict) {
         if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Input is NULL");
