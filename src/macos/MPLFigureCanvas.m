@@ -9,6 +9,7 @@
 @implementation MPLFigureCanvas {
     BOOL _isLeftMouseDown;
     BOOL _isHandCursorActive;
+    NSInteger _emulatedLeftMouseDownButton;
     NSEventModifierFlags _previousModifierFlags;
     CALayer *_canvasLayer;
     CALayer *_rubberbandLayer;
@@ -343,11 +344,15 @@
         }
 
         _isLeftMouseDown = YES;
+        _emulatedLeftMouseDownButton = buttonNumber;
 
         [self _updateHandCursor];
 
     } else if ([event type] == NSEventTypeLeftMouseUp) {
-        _isLeftMouseDown = NO;
+        if (_isLeftMouseDown) {
+            buttonNumber = _emulatedLeftMouseDownButton;
+            _isLeftMouseDown = NO;
+        }
 
         [self _updateHandCursor];
     }
