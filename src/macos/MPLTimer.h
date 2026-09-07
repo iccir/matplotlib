@@ -1,5 +1,5 @@
 #import <AppKit/AppKit.h>
-#import <Python.h>
+#import "MPLUtils.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -9,9 +9,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) stop;
 
 - (void) updateIntervalInMsecs:(int)intervalInMsecs;
-- (void) updateSingleShot:(BOOL)singleShot;
 
-@property (atomic, assign, nullable) PyObject *pyObject;
+@property (nonatomic, getter=isSingleShot) BOOL singleShot;
+@property (nonatomic, assign, nullable) MPLPyObjectRef pyObject;
 
 @end
 

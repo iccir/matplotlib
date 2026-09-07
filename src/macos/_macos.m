@@ -797,7 +797,7 @@ Timer__update_single_shot(Timer *self, PyObject *args)
         return NULL;
     }
 
-    [self->object updateSingleShot:(singleShot > 0) ? YES : NO];
+    [self->object setSingleShot:(singleShot > 0) ? YES : NO];
 
     END_OBJC_ENTRY
     RETURN_NULL_OR_NONE
