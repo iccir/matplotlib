@@ -1,5 +1,5 @@
 #import <AppKit/AppKit.h>
-#import <Python.h>
+#import "MPLUtils.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -20,7 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
                  wspace: (double) wspace
                  hspace: (double) hspace;
 
-@property (nonatomic, assign, nullable) PyObject *pyObject;
+@property (nonatomic, assign, nullable) MPLPyObjectRef pyObject;
 
 @end
 
