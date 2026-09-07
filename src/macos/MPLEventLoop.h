@@ -1,5 +1,4 @@
 #import <AppKit/AppKit.h>
-#import <Python.h>
 #import "MPLUtils.h"
 
 NS_ASSUME_NONNULL_BEGIN
