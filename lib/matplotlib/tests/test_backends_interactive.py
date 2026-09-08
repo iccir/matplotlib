@@ -675,7 +675,7 @@ def _impl_test_interactive_timers():
     # one, so we don't want double the number of calls here either because
     # two timers are potentially running.
     timer_repeating.start()
-    mock_repeating.call_count = 0
+    mock_repeating.reset_mock()
     # Make sure we can start the timer after stopping a singleshot timer
     timer_single_shot.stop()
     timer_single_shot.start()
