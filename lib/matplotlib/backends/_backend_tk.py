@@ -23,8 +23,36 @@ from matplotlib.backend_bases import (
     TimerBase, ToolContainerBase, cursors, _Mode, MouseButton,
     CloseEvent, KeyEvent, LocationEvent, MouseEvent, ResizeEvent)
 from matplotlib._pylab_helpers import Gcf
-from . import _tkagg
-from ._tkagg import TK_PHOTO_COMPOSITE_OVERLAY, TK_PHOTO_COMPOSITE_SET
+
+try:
+    from . import _tkagg
+    from ._tkagg import TK_PHOTO_COMPOSITE_OVERLAY, TK_PHOTO_COMPOSITE_SET
+except ImportError as e:
+    # catch incompatibility of python-build-standalone with Tk
+    cause1 = getattr(e, '__cause__', None)
+    cause2 = getattr(cause1, '__cause__', None)
+    if (isinstance(cause1, ImportError) and
+            isinstance(cause2, AttributeError) and
+            "'_tkinter' has no attribute '__file__'" in str(cause2)):
+
+        is_uv_python = "/uv/python" in (os.path.realpath(sys.executable))
+        if is_uv_python:
+            raise ImportError(
+                "Failed to import tkagg backend. You appear to be using an outdated "
+                "version of uv's managed Python distribution which is not compatible "
+                "with Tk. Please upgrade to the latest uv version, then update "
+                "Python with: `uv python upgrade --reinstall`"
+                ) from e
+        else:
+            raise ImportError(
+                "Failed to import tkagg backend. This is likely caused by using a "
+                "Python executable based on python-build-standalone, which is not "
+                "compatible with Tk. Recent versions of python-build-standalone "
+                "should be compatible with Tk. Please update your python version "
+                "or select another backend."
+                ) from e
+    else:
+        raise
 
 
 _log = logging.getLogger(__name__)
@@ -268,14 +296,24 @@ class FigureCanvasTk(FigureCanvasBase):
         elif sys.platform == "linux":
             ratio = self._tkcanvas.winfo_fpixels('1i') / 96
         if ratio is not None and self._set_device_pixel_ratio(ratio):
-            # The easiest way to resize the canvas is to resize the canvas
-            # widget itself, since we implement all the logic for resizing the
-            # canvas backing store on that event.
+            # Resize the canvas widget, then explicitly update the figure
+            # size to match the actual widget dimensions.  When the canvas
+            # is constrained by a geometry manager (pack/grid), <Configure>
+            # may not fire after configure(), so we handle the resize
+            # directly — similar to Qt's _update_pixel_ratio approach.
             w, h = self.get_width_height(physical=True)
             self._tkcanvas.configure(width=w, height=h)
+            self._resize_figure_for_canvas_size(
+                self._tkcanvas.winfo_width(),
+                self._tkcanvas.winfo_height())
 
     def resize(self, event):
-        width, height = event.width, event.height
+        self._resize_figure_for_canvas_size(event.width, event.height)
+
+    def _resize_figure_for_canvas_size(self, width, height):
+        """Update figure size and redraw based on a given canvas size."""
+        if width <= 0 or height <= 0:
+            return
 
         # compute desired figure size in inches
         dpival = self.figure.dpi
@@ -315,9 +353,10 @@ class FigureCanvasTk(FigureCanvasBase):
     def _event_mpl_coords(self, event):
         # calling canvasx/canvasy allows taking scrollbars into account (i.e.
         # the top of the widget may have been scrolled out of view).
+        height = self.get_width_height(physical=True)[1]
         return (self._tkcanvas.canvasx(event.x),
                 # flipy so y=0 is bottom of canvas
-                self.figure.bbox.height - self._tkcanvas.canvasy(event.y))
+                height - self._tkcanvas.canvasy(event.y))
 
     def motion_notify_event(self, event):
         MouseEvent("motion_notify_event", self,
@@ -377,7 +416,7 @@ class FigureCanvasTk(FigureCanvasBase):
         if w != self._tkcanvas:
             return
         x = self._tkcanvas.canvasx(event.x_root - w.winfo_rootx())
-        y = (self.figure.bbox.height
+        y = (self.get_width_height(physical=True)[1]
              - self._tkcanvas.canvasy(event.y_root - w.winfo_rooty()))
         step = event.delta / 120
         MouseEvent("scroll_event", self,
@@ -540,11 +579,11 @@ class FigureManagerTk(FigureManagerBase):
             # supported Tk version is increased to 8.6, as Tk 8.6+ natively
             # supports PNG images.
             icon_fname = str(cbook._get_data_path(
-                'images/matplotlib.png'))
+                'images/matplotlib_small.png'))
             icon_img = ImageTk.PhotoImage(file=icon_fname, master=window)
 
             icon_fname_large = str(cbook._get_data_path(
-                'images/matplotlib_large.png'))
+                'images/matplotlib.png'))
             icon_img_large = ImageTk.PhotoImage(
                 file=icon_fname_large, master=window)
 
@@ -632,6 +671,7 @@ class FigureManagerTk(FigureManagerBase):
         else:
             self.window.update()
             delayed_destroy()
+        super().destroy()
 
     def get_window_title(self):
         return self.window.wm_title()
@@ -663,7 +703,15 @@ class NavigationToolbar2Tk(NavigationToolbar2, tk.Frame):
         if window is None:
             window = canvas.get_tk_widget().master
         tk.Frame.__init__(self, master=window, borderwidth=2,
-                          width=int(canvas.figure.bbox.width), height=50)
+                          width=canvas.get_width_height()[0], height=50)
+        # Avoid message_label expanding the toolbar size, and in turn expanding the
+        # canvas size.
+        # Without pack_propagate(False), when the user defines a small figure size
+        # (e.g. 2x2):
+        # 1. Figure size that is bigger than the user's expectation.
+        # 2. When message_label is refreshed by mouse enter/leave, the canvas
+        #    size will also be changed.
+        self.pack_propagate(False)
 
         self._buttons = {}
         for text, tooltip_text, image_file, callback in self.toolitems:
@@ -753,12 +801,12 @@ class NavigationToolbar2Tk(NavigationToolbar2, tk.Frame):
             self.canvas._tkcanvas.delete(self.canvas._rubberband_rect_white)
         if self.canvas._rubberband_rect_black:
             self.canvas._tkcanvas.delete(self.canvas._rubberband_rect_black)
-        height = self.canvas.figure.bbox.height
+        height = self.canvas.get_width_height(physical=True)[1]
         y0 = height - y0
         y1 = height - y1
         self.canvas._rubberband_rect_black = (
             self.canvas._tkcanvas.create_rectangle(
-                x0, y0, x1, y1))
+                x0, y0, x1, y1, outline='black'))
         self.canvas._rubberband_rect_white = (
             self.canvas._tkcanvas.create_rectangle(
                 x0, y0, x1, y1, outline='white', dash=(3, 3)))
@@ -806,7 +854,7 @@ class NavigationToolbar2Tk(NavigationToolbar2, tk.Frame):
         # Use the high-resolution (48x48 px) icon if it exists and is needed
         with Image.open(path_large if (size > 24 and path_large.exists())
                         else path_regular) as im:
-            # assure a RGBA image as foreground color is RGB
+            # assure an RGBA image as foreground color is RGB
             im = im.convert("RGBA")
             image = ImageTk.PhotoImage(im.resize((size, size)), master=self)
             button._ntimage = image

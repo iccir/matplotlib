@@ -212,16 +212,8 @@ def detrend_linear(y):
 
 
 def _stride_windows(x, n, noverlap=0):
-    x = np.asarray(x)
-
     _api.check_isinstance(Integral, n=n, noverlap=noverlap)
-    if not (1 <= n <= x.size and n < noverlap):
-        raise ValueError(f'n ({n}) and noverlap ({noverlap}) must be positive integers '
-                         f'with n < noverlap and n <= x.size ({x.size})')
-
-    if n == 1 and noverlap == 0:
-        return x[np.newaxis]
-
+    x = np.asarray(x)
     step = n - noverlap
     shape = (n, (x.shape[-1]-noverlap)//step)
     strides = (x.strides[0], step*x.strides[0])
@@ -257,7 +249,7 @@ def _spectral_helper(x, y=None, NFFT=None, Fs=None, detrend_func=None,
     if NFFT is None:
         NFFT = 256
 
-    if noverlap >= NFFT:
+    if not (0 <= noverlap < NFFT):
         raise ValueError('noverlap must be less than NFFT')
 
     if mode is None or mode == 'default':
@@ -361,7 +353,7 @@ def _spectral_helper(x, y=None, NFFT=None, Fs=None, detrend_func=None,
         # the sampling frequency, if desired. Scale everything, except the DC
         # component and the NFFT/2 component:
 
-        # if we have a even number of frequencies, don't scale NFFT/2
+        # if we have an even number of frequencies, don't scale NFFT/2
         if not NFFT % 2:
             slc = slice(1, -1, None)
         # if we have an odd number, just don't scale DC
@@ -370,9 +362,9 @@ def _spectral_helper(x, y=None, NFFT=None, Fs=None, detrend_func=None,
 
         result[slc] *= scaling_factor
 
-        # MATLAB divides by the sampling frequency so that density function
-        # has units of dB/Hz and can be integrated by the plotted frequency
-        # values. Perform the same scaling here.
+        # Divide by the sampling frequency so that density function
+        # has units of V**2/Hz, if x is measured in units of V and the sampling
+        # frequency is measured in Hz.
         if scale_by_freq:
             result /= Fs
             # Scale the spectrum by the norm of the window to compensate for
@@ -478,10 +470,10 @@ detrend : {'none', 'mean', 'linear'} or callable, default: 'none'
     `.detrend_mean`. 'linear' calls `.detrend_linear`.
 
 scale_by_freq : bool, default: True
-    Whether the resulting density values should be scaled by the scaling
-    frequency, which gives density in units of 1/Hz.  This allows for
-    integration over the returned frequency values.  The default is True for
-    MATLAB compatibility.""")
+    Whether the resulting density values should be divided by the sampling
+    frequency, which gives density in units of 1/Hz, if the sampling rate
+    is measured in Hz.  This allows for integration over the returned
+    frequency values.  The default is True for MATLAB compatibility.""")
 
 
 @_docstring.interpd

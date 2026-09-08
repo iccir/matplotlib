@@ -1,6 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#ifdef PYBIND11_HAS_SUBINTERPRETER_SUPPORT
+#include <pybind11/subinterpreter.h>
+#endif
+
 #include "mplutils.h"
 #include "py_converters.h"
 #include "_backend_agg.h"
@@ -58,37 +62,8 @@ PyRendererAgg_draw_path(RendererAgg *self,
 static void
 PyRendererAgg_draw_text_image(RendererAgg *self,
                               py::array_t<agg::int8u, py::array::c_style | py::array::forcecast> image_obj,
-                              std::variant<double, int> vx,
-                              std::variant<double, int> vy,
-                              double angle,
-                              GCAgg &gc)
+                              int x, int y, double angle, GCAgg &gc)
 {
-    int x, y;
-
-    if (auto value = std::get_if<double>(&vx)) {
-        auto api = py::module_::import("matplotlib._api");
-        auto warn = api.attr("warn_deprecated");
-        warn("since"_a="3.10", "name"_a="x", "obj_type"_a="parameter as float",
-             "alternative"_a="int(x)");
-        x = static_cast<int>(*value);
-    } else if (auto value = std::get_if<int>(&vx)) {
-        x = *value;
-    } else {
-        throw std::runtime_error("Should not happen");
-    }
-
-    if (auto value = std::get_if<double>(&vy)) {
-        auto api = py::module_::import("matplotlib._api");
-        auto warn = api.attr("warn_deprecated");
-        warn("since"_a="3.10", "name"_a="y", "obj_type"_a="parameter as float",
-             "alternative"_a="int(y)");
-        y = static_cast<int>(*value);
-    } else if (auto value = std::get_if<int>(&vy)) {
-        y = *value;
-    } else {
-        throw std::runtime_error("Should not happen");
-    }
-
     // TODO: This really shouldn't be mutable, but Agg's renderer buffers aren't const.
     auto image = image_obj.mutable_unchecked<2>();
 
@@ -127,7 +102,6 @@ PyRendererAgg_draw_image(RendererAgg *self,
     x = mpl_round(x);
     y = mpl_round(y);
 
-    gc.alpha = 1.0;
     self->draw_image(gc, x, y, image);
 }
 
@@ -214,9 +188,14 @@ PyRendererAgg_draw_gouraud_triangles(RendererAgg *self,
     self->draw_gouraud_triangles(gc, points, colors, trans);
 }
 
+#ifdef PYBIND11_HAS_SUBINTERPRETER_SUPPORT
+PYBIND11_MODULE(_backend_agg, m,
+                py::mod_gil_not_used(), py::multiple_interpreters::per_interpreter_gil())
+#else
 PYBIND11_MODULE(_backend_agg, m, py::mod_gil_not_used())
+#endif
 {
-    py::class_<RendererAgg>(m, "RendererAgg", py::buffer_protocol())
+    py::classh<RendererAgg>(m, "RendererAgg", py::buffer_protocol())
         .def(py::init<unsigned int, unsigned int, double>(),
              "width"_a, "height"_a, "dpi"_a)
 
@@ -238,7 +217,7 @@ PYBIND11_MODULE(_backend_agg, m, py::mod_gil_not_used())
              "gc"_a, "master_transform"_a, "mesh_width"_a, "mesh_height"_a,
              "coordinates"_a, "offsets"_a, "offset_trans"_a, "facecolors"_a,
              "antialiased"_a, "edgecolors"_a)
-        .def("draw_gouraud_triangles", &PyRendererAgg_draw_gouraud_triangles,
+        .def("_draw_gouraud_triangles", &PyRendererAgg_draw_gouraud_triangles,
              "gc"_a, "points"_a, "colors"_a, "trans"_a = nullptr)
 
         .def("clear", &RendererAgg::clear)
@@ -254,19 +233,19 @@ PYBIND11_MODULE(_backend_agg, m, py::mod_gil_not_used())
 
         .def_buffer([](RendererAgg *renderer) -> py::buffer_info {
             std::vector<py::ssize_t> shape {
-                renderer->get_height(),
-                renderer->get_width(),
+                static_cast<py::ssize_t>(renderer->get_height()),
+                static_cast<py::ssize_t>(renderer->get_width()),
                 4
             };
             std::vector<py::ssize_t> strides {
-                renderer->get_width() * 4,
+                static_cast<py::ssize_t>(renderer->get_width() * 4),
                 4,
                 1
             };
             return py::buffer_info(renderer->pixBuffer, shape, strides);
         });
 
-    py::class_<BufferRegion>(m, "BufferRegion", py::buffer_protocol())
+    py::classh<BufferRegion>(m, "BufferRegion", py::buffer_protocol())
         // BufferRegion is not constructible from Python, thus no py::init is added.
         .def("set_x", &PyBufferRegion_set_x)
         .def("set_y", &PyBufferRegion_set_y)

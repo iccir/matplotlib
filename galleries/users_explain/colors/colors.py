@@ -61,9 +61,14 @@ Matplotlib recognizes the following formats to specify a color.
 +--------------------------------------+--------------------------------------+
 | "CN" color spec where ``'C'``        | - ``'C0'``                           |
 | precedes a number acting as an index | - ``'C1'``                           |
-| into the default property cycle.     +--------------------------------------+
-|                                      | :rc:`axes.prop_cycle`                |
-| .. note:: Matplotlib indexes color   |                                      |
+| into the default property cycle.     |                                      |
+|                                      |                                      |
+| .. note:: The cycle comes from the   |                                      |
+|           global                     |                                      |
+|           :rc:`axes.prop_cycle`, not |                                      |
+|           an Axes-local cycle set by |                                      |
+|           `~.Axes.set_prop_cycle`.   |                                      |
+|           Matplotlib indexes color   |                                      |
 |           at draw time and defaults  |                                      |
 |           to black if cycle does not |                                      |
 |           include color.             |                                      |
@@ -90,6 +95,8 @@ Matplotlib recognizes the following formats to specify a color.
 "Red", "Green", and "Blue" are the intensities of those colors. In combination,
 they represent the colorspace.
 
+.. _colors_transparency:
+
 Transparency
 ============
 
@@ -97,14 +104,15 @@ The *alpha* value of a color specifies its transparency, where 0 is fully
 transparent and 1 is fully opaque. When a color is semi-transparent, the
 background color will show through.
 
-The *alpha* value determines the resulting color by blending the
+By default, the *alpha* value determines the resulting color by blending the
 foreground color with the background color according to the formula
 
 .. math::
 
    RGB_{result} = RGB_{background} * (1 - \\alpha) + RGB_{foreground} * \\alpha
 
-The following plot illustrates the effect of transparency.
+See :ref:`blend-modes` for alternative blending options.  The following plot
+illustrates the effect of transparency.
 """
 
 import matplotlib.pyplot as plt

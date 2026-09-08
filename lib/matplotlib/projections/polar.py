@@ -34,7 +34,9 @@ class PolarTransform(mtransforms.Transform):
 
     input_dims = output_dims = 2
 
-    def __init__(self, axis=None, use_rmin=True, *, scale_transform=None):
+    @_api.delete_parameter('3.11', 'apply_theta_transforms')
+    def __init__(self, axis=None, use_rmin=True, *,
+                 apply_theta_transforms=False, scale_transform=None):
         """
         Parameters
         ----------
@@ -183,7 +185,9 @@ class InvertedPolarTransform(mtransforms.Transform):
     """
     input_dims = output_dims = 2
 
-    def __init__(self, axis=None, use_rmin=True):
+    @_api.delete_parameter('3.11', 'apply_theta_transforms')
+    def __init__(self, axis=None, use_rmin=True,
+                 *, apply_theta_transforms=False):
         """
         Parameters
         ----------
@@ -431,6 +435,7 @@ class RadialLocator(mticker.Locator):
     scale of the *r*-axis).
     """
 
+    @_api.delete_parameter("3.11", "axes")
     def __init__(self, base, axes=None):
         self.base = base
         self._axes = axes
@@ -440,11 +445,11 @@ class RadialLocator(mticker.Locator):
 
     def __call__(self):
         # Ensure previous behaviour with full circle non-annular views.
-        if self._axes:
-            if _is_full_circle_rad(*self._axes.viewLim.intervalx):
-                rorigin = self._axes.get_rorigin() * self._axes.get_rsign()
-                if self._axes.get_rmin() <= rorigin:
-                    return [tick for tick in self.base() if tick > rorigin]
+        ax = self.base.axis.axes
+        if _is_full_circle_rad(*ax.viewLim.intervalx):
+            rorigin = ax.get_rorigin() * ax.get_rsign()
+            if ax.get_rmin() <= rorigin:
+                return [tick for tick in self.base() if tick > rorigin]
         return self.base()
 
     def _zero_in_bounds(self):
@@ -452,7 +457,7 @@ class RadialLocator(mticker.Locator):
         Return True if zero is within the valid values for the
         scale of the radial axis.
         """
-        vmin, vmax = self._axes.yaxis._scale.limit_range_for_scale(0, 1, 1e-5)
+        vmin, vmax = self.base.axis._scale.limit_range_for_scale(0, 1, 1e-5)
         return vmin == 0
 
     def nonsingular(self, vmin, vmax):
@@ -468,7 +473,7 @@ class RadialLocator(mticker.Locator):
         if self._zero_in_bounds() and vmax > vmin:
             # this allows inverted r/y-lims
             vmin = min(0, vmin)
-        return mtransforms.nonsingular(vmin, vmax)
+        return mtransforms._nonsingular(vmin, vmax)
 
 
 class _ThetaShift(mtransforms.ScaledTranslation):
@@ -681,7 +686,7 @@ class RadialAxis(maxis.YAxis):
 
     def set_major_locator(self, locator):
         if not isinstance(locator, RadialLocator):
-            locator = RadialLocator(locator, self.axes)
+            locator = RadialLocator(locator)
         super().set_major_locator(locator)
 
     def clear(self):
@@ -1064,6 +1069,21 @@ class PolarAxes(Axes):
             raise ValueError("The angle range must be less than a full circle")
         return tuple(np.rad2deg((new_min, new_max)))
 
+    def get_thetalim(self):
+        """
+        Get the minimum and maximum theta values.
+
+        Returns
+        -------
+        thetamin, thetamax : float
+            The minimum and maximum theta limit values in degrees.
+
+        See Also
+        --------
+        set_thetalim
+        """
+        return tuple(np.rad2deg(self.get_xlim()))
+
     def set_theta_offset(self, offset):
         """
         Set the offset for the location of 0 in radians.
@@ -1222,6 +1242,21 @@ class PolarAxes(Axes):
                                  'argument and kwarg "rmax"')
         return self.set_ylim(bottom=bottom, top=top, emit=emit, auto=auto,
                              **kwargs)
+
+    def get_rlim(self):
+        """
+        Get the radial axis view limits.
+
+        Returns
+        -------
+        bottom, top : float
+            The lower and upper radial axis limits.
+
+        See Also
+        --------
+        set_rlim
+        """
+        return self.get_ylim()
 
     def get_rlabel_position(self):
         """

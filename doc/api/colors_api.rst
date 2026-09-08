@@ -32,6 +32,7 @@ Color norms
    PowerNorm
    SymLogNorm
    TwoSlopeNorm
+   MultiNorm
 
 Univariate Colormaps
 --------------------
@@ -54,6 +55,7 @@ Multivariate Colormaps
    BivarColormap
    SegmentedBivarColormap
    BivarColormapFromImage
+   MultivarColormap
 
 Other classes
 -------------

@@ -14,7 +14,8 @@ import weakref
 from PIL import Image
 
 import matplotlib as mpl
-from matplotlib import cbook, font_manager as fm
+from matplotlib import _api, cbook, font_manager as fm
+from matplotlib.artist import _BlendModePDFSpec, BlendMode
 from matplotlib.backend_bases import (
     _Backend, FigureCanvasBase, FigureManagerBase, RendererBase
 )
@@ -38,9 +39,17 @@ _DOCUMENTCLASS = r"\documentclass{article}"
 
 def _get_preamble():
     """Prepare a LaTeX preamble based on the rcParams configuration."""
-    font_size_pt = FontProperties(
-        size=mpl.rcParams["font.size"]
-    ).get_size_in_points()
+    def _to_fontspec():
+        for command, family in [("setmainfont", "serif"),
+                                ("setsansfont", "sans\\-serif"),
+                                ("setmonofont", "monospace")]:
+            font_path = fm.findfont(family)
+            path = pathlib.Path(font_path)
+            yield r"  \%s{%s}[Path=\detokenize{%s/}%s]" % (
+                command, path.name, path.parent.as_posix(),
+                f',FontIndex={font_path.face_index:d}' if path.suffix == '.ttc' else '')
+
+    font_size_pt = FontProperties(size=mpl.rcParams["font.size"]).get_size_in_points()
     return "\n".join([
         # Remove Matplotlib's custom command \mathdefault.  (Not using
         # \mathnormal instead since this looks odd with Computer Modern.)
@@ -63,15 +72,8 @@ def _get_preamble():
         *([
             r"\ifdefined\pdftexversion\else  % non-pdftex case.",
             r"  \usepackage{fontspec}",
-        ] + [
-            r"  \%s{%s}[Path=\detokenize{%s/}]"
-            % (command, path.name, path.parent.as_posix())
-            for command, path in zip(
-                ["setmainfont", "setsansfont", "setmonofont"],
-                [pathlib.Path(fm.findfont(family))
-                 for family in ["serif", "sans\\-serif", "monospace"]]
-            )
-        ] + [r"\fi"] if mpl.rcParams["pgf.rcfonts"] else []),
+            *_to_fontspec(),
+            r"\fi"] if mpl.rcParams["pgf.rcfonts"] else []),
         # Documented as "must come last".
         mpl.texmanager._usepackage_if_not_loaded("underscore", option="strings"),
     ])
@@ -153,6 +155,15 @@ def _metadata_to_str(key, value):
         value = value.name.decode('ascii')
     else:
         value = str(value)
+
+    # ensure that metadata does not contain special TeX chars because we
+    # insert the metadata as raw text into the TeX source
+    invalid_chars = r"\{}[]()"
+    if any(c in value + key for c in invalid_chars):
+        raise ValueError(
+            f"Invalid metadata value for {key!r}: {value!r}. "
+            f"The value must not contain the chars {invalid_chars}.")
+
     return f'{key}={{{value}}}'
 
 
@@ -281,7 +292,7 @@ class LatexManager:
         # it.
         try:
             self.latex = subprocess.Popen(
-                [mpl.rcParams["pgf.texsystem"], "-halt-on-error"],
+                [mpl.rcParams["pgf.texsystem"], "-halt-on-error", "-no-shell-escape"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 encoding="utf-8", cwd=self.tmpdir)
         except FileNotFoundError as err:
@@ -383,6 +394,7 @@ class RendererPgf(RendererBase):
         self.fh = fh
         self.figure = figure
         self.image_counter = 0
+        self._group_blend_modes = []
 
     def draw_markers(self, gc, marker_path, marker_trans, path, trans,
                      rgbFace=None):
@@ -394,6 +406,7 @@ class RendererPgf(RendererBase):
         f = 1. / self.dpi
 
         # set style and clip
+        self._print_pgf_blend(gc)
         self._print_pgf_clip(gc)
         self._print_pgf_path_styles(gc, rgbFace)
 
@@ -426,6 +439,7 @@ class RendererPgf(RendererBase):
         # docstring inherited
         _writeln(self.fh, r"\begin{pgfscope}")
         # draw the path
+        self._print_pgf_blend(gc)
         self._print_pgf_clip(gc)
         self._print_pgf_path_styles(gc, rgbFace)
         self._print_pgf_path(gc, path, transform, rgbFace)
@@ -439,6 +453,7 @@ class RendererPgf(RendererBase):
             self._print_pgf_path_styles(gc, rgbFace)
 
             # combine clip and path for clipping
+            self._print_pgf_blend(gc)
             self._print_pgf_clip(gc)
             self._print_pgf_path(gc, path, transform, rgbFace)
             _writeln(self.fh, r"\pgfusepath{clip}")
@@ -448,6 +463,17 @@ class RendererPgf(RendererBase):
                      r"\pgfsys@defobject{currentpattern}"
                      r"{\pgfqpoint{0in}{0in}}{\pgfqpoint{1in}{1in}}{")
             _writeln(self.fh, r"\begin{pgfscope}")
+
+            # hatch linewidth and color
+            lw = gc.get_hatch_linewidth() * mpl_pt_to_in * latex_in_to_pt
+            hatch_rgba = gc.get_hatch_color()
+            _writeln(self.fh, r"\pgfsetlinewidth{%fpt}" % lw)
+            _writeln(self.fh,
+                     r"\definecolor{currenthatch}{rgb}{%f,%f,%f}"
+                     % hatch_rgba[:3])
+            _writeln(self.fh, r"\pgfsetstrokecolor{currenthatch}")
+            _writeln(self.fh, r"\pgfsetstrokeopacity{%f}" % hatch_rgba[3])
+
             _writeln(self.fh,
                      r"\pgfpathrectangle"
                      r"{\pgfqpoint{0in}{0in}}{\pgfqpoint{1in}{1in}}")
@@ -474,6 +500,14 @@ class RendererPgf(RendererBase):
                 _writeln(self.fh, r"\pgfsys@transformshift{0in}{1in}")
 
             _writeln(self.fh, r"\end{pgfscope}")
+
+    def _print_pgf_blend(self, gc):
+        if (blend_mode := gc.get_blend_mode()) not in _BlendModePDFSpec:
+            _log.warning(f"The '{blend_mode}' blend mode is not supported by the "
+                         f"PGF backend. Falling back to the 'normal' blend mode.")
+            blend_mode = "normal"
+        if blend_mode != "normal":
+            _writeln(self.fh, r"\pgfsetblendmode{%s}" % blend_mode)
 
     def _print_pgf_clip(self, gc):
         f = 1. / self.dpi
@@ -648,6 +682,7 @@ class RendererPgf(RendererBase):
 
         # reference the image in the pgf picture
         _writeln(self.fh, r"\begin{pgfscope}")
+        self._print_pgf_blend(gc)
         self._print_pgf_clip(gc)
         f = 1. / self.dpi  # from display coords to inch
         if transform is None:
@@ -680,6 +715,7 @@ class RendererPgf(RendererBase):
         s = _escape_and_apply_props(s, prop)
 
         _writeln(self.fh, r"\begin{pgfscope}")
+        self._print_pgf_blend(gc)
         self._print_pgf_clip(gc)
 
         alpha = gc.get_alpha()
@@ -745,13 +781,43 @@ class RendererPgf(RendererBase):
         # docstring inherited
         return points * mpl_pt_to_in * self.dpi
 
+    def open_blend_group(self, blend_mode, *, alpha=1, knockout=False):
+        # The file handle is not valid during layout computation
+        if self.fh.closed:
+            return  # we can simply return because blending is irrelevant to layout
+
+        if blend_mode is not None:
+            _api.check_in_list(BlendMode, blend_mode=blend_mode)
+            if blend_mode not in _BlendModePDFSpec:
+                _log.warning(f"The '{blend_mode}' blend mode is not supported by the "
+                             f"PGF backend. Falling back to the 'normal' blend mode.")
+                blend_mode = "normal"
+        self._group_blend_modes.append(blend_mode)
+        if blend_mode is not None:
+            _writeln(self.fh, r"\pgfsetblendmode{%s}" % blend_mode)
+            _writeln(self.fh, r"\pgfsetfillopacity{%s}" % alpha)
+        options = ["isolated"] if blend_mode is not None else []
+        options += ["knockout"] if knockout else []
+        _writeln(self.fh, r"\pgftransparencygroup[%s]" % (",".join(options)))
+
+    def close_blend_group(self):
+        # The file handle is not valid during layout computation
+        if self.fh.closed:
+            return  # we can simply return because blending is irrelevant to layout
+
+        blend_mode = self._group_blend_modes.pop()
+        _writeln(self.fh, r"\endpgftransparencygroup")
+        if blend_mode is not None:
+            _writeln(self.fh, r"\pgfsetfillopacity{1}")
+
 
 class FigureCanvasPgf(FigureCanvasBase):
     filetypes = {"pgf": "LaTeX PGF picture",
                  "pdf": "LaTeX compiled PGF picture",
                  "png": "Portable Network Graphics", }
 
-    def get_default_filetype(self):
+    @classmethod
+    def get_default_filetype(cls):
         return 'pdf'
 
     def _print_pgf_to_fh(self, fh, *, bbox_inches_restore=None):
@@ -848,7 +914,7 @@ class FigureCanvasPgf(FigureCanvasBase):
             texcommand = mpl.rcParams["pgf.texsystem"]
             cbook._check_and_log_subprocess(
                 [texcommand, "-interaction=nonstopmode", "-halt-on-error",
-                 "figure.tex"], _log, cwd=tmpdir)
+                 "-no-shell-escape", "figure.tex"], _log, cwd=tmpdir)
             with ((tmppath / "figure.pdf").open("rb") as orig,
                   cbook.open_file_cm(fname_or_fh, "wb") as dest):
                 shutil.copyfileobj(orig, dest)  # copy file contents to target
@@ -965,7 +1031,7 @@ class PdfPages:
             tex_source.write_bytes(self._file.getvalue())
             cbook._check_and_log_subprocess(
                 [texcommand, "-interaction=nonstopmode", "-halt-on-error",
-                 tex_source],
+                 "-no-shell-escape", tex_source],
                 _log, cwd=tmpdir)
             shutil.move(tex_source.with_suffix(".pdf"), self._output_name)
 

@@ -158,7 +158,7 @@ from packaging.version import parse as parse_version
 
 # cbook must import matplotlib only within function
 # definitions, so it is safe to import from it here.
-from . import _api, _version, cbook, _docstring, rcsetup
+from . import _api, _version, cbook, rcsetup
 from matplotlib._api import MatplotlibDeprecationWarning
 from matplotlib.colors import _color_sequences as color_sequences
 from matplotlib.rcsetup import cycler  # noqa: F401
@@ -250,7 +250,7 @@ def _check_versions():
     from . import ft2font  # noqa: F401
 
     for modname, minver in [
-            ("cycler", "0.10"),
+            ("cycler", "0.12.0"),
             ("dateutil", "2.7"),
             ("kiwisolver", "1.3.1"),
             ("numpy", "1.25"),
@@ -532,19 +532,55 @@ def _get_config_or_cache_dir(xdg_base_getter):
     elif sys.platform.startswith(('linux', 'freebsd')):
         # Only call _xdg_base_getter here so that MPLCONFIGDIR is tried first,
         # as _xdg_base_getter can throw.
-        configdir = Path(xdg_base_getter(), "matplotlib")
+        try:
+            configdir = Path(xdg_base_getter(), "matplotlib")
+        except RuntimeError:  # raised if Path.home() is not available
+            pass
+    elif sys.platform == 'win32':
+        # On Windows, prefer %LOCALAPPDATA%\matplotlib which is the proper
+        # location for non-roaming application data (cache and config).
+        # See: https://docs.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data
+        #
+        # However, for backwards compatibility, if the old location
+        # (%USERPROFILE%\.matplotlib) exists, continue using it so existing
+        # users don't lose their config.
+        try:
+            old_configdir = Path.home() / ".matplotlib"
+            if old_configdir.is_dir():
+                configdir = old_configdir
+            else:
+                localappdata = os.environ.get('LOCALAPPDATA')
+                if localappdata:
+                    configdir = Path(localappdata) / "matplotlib"
+                else:
+                    configdir = old_configdir
+        except RuntimeError:  # raised if Path.home() is not available
+            localappdata = os.environ.get('LOCALAPPDATA')
+            if localappdata:
+                configdir = Path(localappdata) / "matplotlib"
     else:
-        configdir = Path.home() / ".matplotlib"
-    # Resolve the path to handle potential issues with inaccessible symlinks.
-    configdir = configdir.resolve()
-    try:
-        configdir.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
-        _log.warning("mkdir -p failed for path %s: %s", configdir, exc)
+        try:
+            configdir = Path.home() / ".matplotlib"
+        except RuntimeError:  # raised if Path.home() is not available
+            pass
+
+    if configdir:
+        # Resolve the path to handle potential issues with inaccessible symlinks.
+        configdir = configdir.resolve()
+        try:
+            configdir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            _log.warning("mkdir -p failed for path %s: %s", configdir, exc)
+        else:
+            if os.access(str(configdir), os.W_OK) and configdir.is_dir():
+                return str(configdir)
+            _log.warning("%s is not a writable directory", configdir)
+        if os.environ.get('MPLCONFIGDIR'):
+            issue_msg = f"MPLCONFIGDIR ({configdir})"
+        else:
+            issue_msg = f"the default path ({configdir})"
     else:
-        if os.access(str(configdir), os.W_OK) and configdir.is_dir():
-            return str(configdir)
-        _log.warning("%s is not a writable directory", configdir)
+        issue_msg = "resolving the home directory"
     # If the config or cache directory cannot be created or is not a writable
     # directory, create a temporary one.
     try:
@@ -552,17 +588,17 @@ def _get_config_or_cache_dir(xdg_base_getter):
     except OSError as exc:
         raise OSError(
             f"Matplotlib requires access to a writable cache directory, but there "
-            f"was an issue with the default path ({configdir}), and a temporary "
+            f"was an issue with {issue_msg}, and a temporary "
             f"directory could not be created; set the MPLCONFIGDIR environment "
             f"variable to a writable directory") from exc
     os.environ["MPLCONFIGDIR"] = tmpdir
     atexit.register(shutil.rmtree, tmpdir)
     _log.warning(
         "Matplotlib created a temporary cache directory at %s because there was "
-        "an issue with the default path (%s); it is highly recommended to set the "
+        "an issue with %s; it is highly recommended to set the "
         "MPLCONFIGDIR environment variable to a writable directory, in particular to "
         "speed up the import of Matplotlib and to better support multiprocessing.",
-        tmpdir, configdir)
+        tmpdir, issue_msg)
     return tmpdir
 
 
@@ -575,8 +611,9 @@ def get_configdir():
 
     1. If the MPLCONFIGDIR environment variable is supplied, choose that.
     2. On Linux, follow the XDG specification and look first in
-       ``$XDG_CONFIG_HOME``, if defined, or ``$HOME/.config``.  On other
-       platforms, choose ``$HOME/.matplotlib``.
+       ``$XDG_CONFIG_HOME``, if defined, or ``$HOME/.config``.  On Windows,
+       use ``%LOCALAPPDATA%\\matplotlib``.  On other platforms, choose
+       ``$HOME/.matplotlib``.
     3. If the chosen directory exists and is writable, use that as the
        configuration directory.
     4. Else, create a temporary directory, and use it as the configuration
@@ -591,7 +628,8 @@ def get_cachedir():
     Return the string path of the cache directory.
 
     The procedure used to find the directory is the same as for
-    `get_configdir`, except using ``$XDG_CACHE_HOME``/``$HOME/.cache`` instead.
+    `get_configdir`, except using ``$XDG_CACHE_HOME``/``$HOME/.cache`` instead
+    on Linux.  On Windows, uses ``%LOCALAPPDATA%\\matplotlib`` (same as config).
     """
     return _get_config_or_cache_dir(_get_xdg_cache_dir)
 
@@ -647,23 +685,13 @@ def matplotlib_fname():
                        "install is broken")
 
 
-@_docstring.Substitution(
-    "\n".join(map("- {}".format, sorted(rcsetup._validators, key=str.lower)))
-)
 class RcParams(MutableMapping, dict):
     """
     A dict-like key-value store for config parameters, including validation.
 
-    Validating functions are defined and associated with rc parameters in
-    :mod:`matplotlib.rcsetup`.
+    This is the data structure behind `matplotlib.rcParams`.
 
-    The list of rcParams is:
-
-    %s
-
-    See Also
-    --------
-    :ref:`customizing-with-matplotlibrc-files`
+    The complete list of rcParams can be found in :doc:`/users/explain/configuration`.
     """
 
     validate = rcsetup._validators
@@ -747,13 +775,15 @@ class RcParams(MutableMapping, dict):
                 and val is rcsetup._auto_backend_sentinel
                 and "backend" in self):
             return
-        valid_key = _api.check_getitem(
+        valid_key = _api.getitem_checked(
             self.validate, rcParam=key, _error_cls=KeyError
         )
         try:
             cval = valid_key(val)
         except ValueError as ve:
             raise ValueError(f"Key {key}: {ve}") from None
+        if key in {"text.hinting_factor", "text.kerning_factor"} and cval is not None:
+            _api.warn_deprecated("3.11", name=key, obj_type="rcParam")
         self._set(key, cval)
 
     def __getitem__(self, key):
@@ -1024,7 +1054,7 @@ def rc(group, **kwargs):
 
       font = {'family' : 'monospace',
               'weight' : 'bold',
-              'size'   : 'larger'}
+              'size'   : 'large'}
       rc('font', **font)  # pass in the font dict as kwargs
 
     This enables you to easily switch between several configurations.  Use
@@ -1191,8 +1221,7 @@ def use(backend, *, force=True):
     Select the backend used for rendering and GUI integration.
 
     If pyplot is already imported, `~matplotlib.pyplot.switch_backend` is used
-    and if the new backend is different than the current backend, all Figures
-    will be closed.
+    to switch the backend.
 
     Parameters
     ----------
@@ -1331,8 +1360,8 @@ def _val_or_rc(val, *rc_names):
 
 def _init_tests():
     # The version of FreeType to install locally for running the tests. This must match
-    # the value in `meson.build`.
-    LOCAL_FREETYPE_VERSION = '2.6.1'
+    # the value in `subprojects/freetype2.wrap`.
+    LOCAL_FREETYPE_VERSION = '2.14.3'
 
     from matplotlib import ft2font
     if (ft2font.__freetype_version__ != LOCAL_FREETYPE_VERSION or
@@ -1348,11 +1377,16 @@ def _init_tests():
             ft2font.__freetype_version__,
             "" if ft2font.__freetype_build_type__ == 'local' else "not ")
 
+    # Generate a shortcut for classic testing style.
+    from matplotlib.style import _base_library, library
+    _base_library['_classic_test'] = library['_classic_test'] = RcParams(
+            _base_library['classic'] | _base_library['_classic_test_patch'])
+
 
 def _replacer(data, value):
     """
-    Either returns ``data[value]`` or passes ``data`` back, converts either to
-    a sequence.
+    Either returns ``data[value]`` or passes ``data`` back, converting any
+    ``MappingView`` to a sequence.
     """
     try:
         # if key isn't a string don't bother
@@ -1491,6 +1525,8 @@ def _preprocess_data(func=None, *, replace_names=None, label_namer=None):
 
     @functools.wraps(func)
     def inner(ax, *args, data=None, **kwargs):
+        __tracebackhide__ = True
+
         if data is None:
             return func(
                 ax,

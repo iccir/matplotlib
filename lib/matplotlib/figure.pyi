@@ -1,11 +1,11 @@
 from collections.abc import Callable, Hashable, Iterable, Sequence
 import os
-from typing import Any, IO, Literal, TypeVar, overload
+from typing import Any, IO, Literal, overload
 
 import numpy as np
 from numpy.typing import ArrayLike
 
-from matplotlib.artist import Artist
+from matplotlib.artist import Artist, ArtistList
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import (
     FigureCanvasBase,
@@ -18,7 +18,7 @@ from matplotlib.colorbar import Colorbar
 from matplotlib.colorizer import ColorizingArtist, Colorizer
 from matplotlib.cm import ScalarMappable
 from matplotlib.gridspec import GridSpec, SubplotSpec, SubplotParams as SubplotParams
-from matplotlib.image import _ImageBase, FigureImage
+from matplotlib.image import FigureImage
 from matplotlib.layout_engine import LayoutEngine
 from matplotlib.legend import Legend
 from matplotlib.lines import Line2D
@@ -27,17 +27,9 @@ from matplotlib.text import Text
 from matplotlib.transforms import Affine2D, Bbox, BboxBase, Transform
 from mpl_toolkits.mplot3d import Axes3D
 
-from .typing import ColorType, HashableList
-
-_T = TypeVar("_T")
+from .typing import ColorType, HashableList, LegendLocType
 
 class FigureBase(Artist):
-    artists: list[Artist]
-    lines: list[Line2D]
-    patches: list[Patch]
-    texts: list[Text]
-    images: list[_ImageBase]
-    legends: list[Legend]
     subfigs: list[SubFigure]
     stale: bool
     suppressComposite: bool | None
@@ -49,6 +41,20 @@ class FigureBase(Artist):
         ha: Literal["left", "center", "right"] = ...,
         which: Literal["major", "minor", "both"] = ...,
     ) -> None: ...
+
+    @property
+    def artists(self) -> ArtistList[Artist]: ...
+    @property
+    def images(self) -> ArtistList[FigureImage]: ...
+    @property
+    def legends(self) -> ArtistList[Legend]: ...
+    @property
+    def lines(self) -> ArtistList[Line2D]: ...
+    @property
+    def patches(self) -> ArtistList[Patch]: ...
+    @property
+    def texts(self) -> ArtistList[Text]: ...
+
     def get_children(self) -> list[Artist]: ...
     def contains(self, mouseevent: MouseEvent) -> tuple[bool, dict[Any, Any]]: ...
     def suptitle(self, t: str, **kwargs) -> Text: ...
@@ -152,13 +158,16 @@ class FigureBase(Artist):
     @overload
     def legend(self) -> Legend: ...
     @overload
-    def legend(self, handles: Iterable[Artist], labels: Iterable[str], **kwargs) -> Legend: ...
+    def legend(self, handles: Iterable[Artist], labels: Iterable[str],
+               *, loc: LegendLocType | None = ..., **kwargs) -> Legend: ...
     @overload
-    def legend(self, *, handles: Iterable[Artist], **kwargs) -> Legend: ...
+    def legend(self, *, handles: Iterable[Artist],
+               loc: LegendLocType | None = ..., **kwargs) -> Legend: ...
     @overload
-    def legend(self, labels: Iterable[str], **kwargs) -> Legend: ...
+    def legend(self, labels: Iterable[str],
+               *, loc: LegendLocType | None = ..., **kwargs) -> Legend: ...
     @overload
-    def legend(self, **kwargs) -> Legend: ...
+    def legend(self, *, loc: LegendLocType | None = ..., **kwargs) -> Legend: ...
 
     def text(
         self,
@@ -193,15 +202,15 @@ class FigureBase(Artist):
     @overload
     def subfigures(
         self,
-        nrows: int,
-        ncols: int,
-        squeeze: Literal[False],
+        nrows: Literal[1] = ...,
+        ncols: Literal[1] = ...,
+        squeeze: Literal[True] = ...,
         wspace: float | None = ...,
         hspace: float | None = ...,
         width_ratios: ArrayLike | None = ...,
         height_ratios: ArrayLike | None = ...,
         **kwargs
-    ) -> np.ndarray: ...
+    ) -> SubFigure: ...
     @overload
     def subfigures(
         self,
@@ -220,13 +229,13 @@ class FigureBase(Artist):
         self,
         nrows: int = ...,
         ncols: int = ...,
-        squeeze: Literal[True] = ...,
+        squeeze: bool = ...,
         wspace: float | None = ...,
         hspace: float | None = ...,
         width_ratios: ArrayLike | None = ...,
         height_ratios: ArrayLike | None = ...,
         **kwargs
-    ) -> np.ndarray | SubFigure: ...
+    ) -> Any: ...
     def add_subfigure(self, subplotspec: SubplotSpec, **kwargs) -> SubFigure: ...
     def sca(self, a: Axes) -> Axes: ...
     def gca(self) -> Axes: ...
@@ -256,19 +265,19 @@ class FigureBase(Artist):
         gridspec_kw: dict[str, Any] | None = ...,
     ) -> dict[str, Axes]: ...
     @overload
-    def subplot_mosaic(
+    def subplot_mosaic[T](
         self,
-        mosaic: list[HashableList[_T]],
+        mosaic: list[HashableList[T]],
         *,
         sharex: bool = ...,
         sharey: bool = ...,
         width_ratios: ArrayLike | None = ...,
         height_ratios: ArrayLike | None = ...,
-        empty_sentinel: _T = ...,
+        empty_sentinel: T = ...,
         subplot_kw: dict[str, Any] | None = ...,
-        per_subplot_kw: dict[_T | tuple[_T, ...], dict[str, Any]] | None = ...,
+        per_subplot_kw: dict[T | tuple[T, ...], dict[str, Any]] | None = ...,
         gridspec_kw: dict[str, Any] | None = ...,
-    ) -> dict[_T, Axes]: ...
+    ) -> dict[T, Axes]: ...
     @overload
     def subplot_mosaic(
         self,

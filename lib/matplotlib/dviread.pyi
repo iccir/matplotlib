@@ -8,6 +8,8 @@ from collections.abc import Generator
 from typing import NamedTuple
 from typing import Self
 
+from .ft2font import CharacterCodeType, GlyphIndexType
+
 class _dvistate(Enum):
     pre = ...
     outer = ...
@@ -32,7 +34,7 @@ class Text(NamedTuple):
     x: int
     y: int
     font: DviFont
-    glyph: int
+    glyph: CharacterCodeType
     width: int
     @property
     def font_path(self) -> Path: ...
@@ -41,9 +43,9 @@ class Text(NamedTuple):
     @property
     def font_effects(self) -> dict[str, float]: ...
     @property
-    def index(self) -> int: ...  # type: ignore[override]
+    def index(self) -> GlyphIndexType: ...  # type: ignore[override]
     @property
-    def glyph_name_or_index(self) -> int | str: ...
+    def glyph_name_or_index(self) -> GlyphIndexType | str: ...
 
 class Dvi:
     file: io.BufferedReader
@@ -58,22 +60,36 @@ class Dvi:
 
 class DviFont:
     texname: bytes
-    size: float
     def __init__(
-        self, scale: float, tfm: Tfm, texname: bytes, vf: Vf | None
+        self, scale: float, metrics: Tfm | TtfMetrics, texname: bytes, vf: Vf | None
     ) -> None: ...
+    @classmethod
+    def from_luatex(cls, scale: float, texname: bytes) -> DviFont: ...
+    @classmethod
+    def from_xetex(
+        cls, scale: float, texname: bytes, subfont: int, effects: dict[str, float]
+    ) -> DviFont: ...
     def __eq__(self, other: object) -> bool: ...
     def __ne__(self, other: object) -> bool: ...
+    @property
+    def size(self) -> float: ...
     @property
     def widths(self) -> list[int]: ...
     @property
     def fname(self) -> str: ...
+    @property
+    def face_index(self) -> int: ...
+    def resolve_path(self) -> Path: ...
+    @property
+    def subfont(self) -> int: ...
+    @property
+    def effects(self) -> dict[str, float]: ...
 
 class Vf(Dvi):
     def __init__(self, filename: str | os.PathLike) -> None: ...
     def __getitem__(self, code: int) -> Page: ...
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class TexMetrics:
     tex_width: int
     tex_height: int
@@ -92,6 +108,10 @@ class Tfm:
     def height(self) -> dict[int, int]: ...
     @property
     def depth(self) -> dict[int, int]: ...
+
+class TtfMetrics:
+    def __init__(self, filename: str | os.PathLike) -> None: ...
+    def get_metrics(self, idx: int) -> TexMetrics: ...
 
 class PsFont(NamedTuple):
     texname: bytes

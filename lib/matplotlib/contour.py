@@ -76,7 +76,7 @@ class ContourLabeler:
             a subset of ``cs.levels``. If not given, all levels are labeled.
 
         fontsize : str or float, default: :rc:`font.size`
-            Size in points or relative size e.g., 'smaller', 'x-large'.
+            Size in points or relative size e.g., 'small', 'x-large'.
             See `.Text.set_size` for accepted string values.
 
         colors : :mpltype:`color` or colors or None, default: None
@@ -143,7 +143,23 @@ class ContourLabeler:
         -------
         labels
             A list of `.Text` instances for the labels.
+
+            Note: The returned Text instances should not be individually
+            removed or have their geometry modified, e.g. by changing text or font size.
+            If you need such a modification, remove the entire
+            `.ContourSet` and recreate it.
         """
+
+        if self.filled:
+            _api.warn_deprecated(
+                "3.11",
+                message="clabel() is not designed to be used with filled contours and "
+                        "may result in inconsistent plots. Applying clabel() to filled "
+                        "contours is thus deprecated since %(since)s. If you need "
+                        "labels with filled contours, instead draw contour lines "
+                        "using contour() in addition to contourf() and add the labels "
+                        "to the contour lines."
+            )
 
         # Based on the input arguments, clabel() adds a list of "label
         # specific" attributes to the ContourSet object.  These attributes are
@@ -451,6 +467,8 @@ class ContourLabeler:
         if transform is None:
             transform = self.axes.transData
         if transform:
+            x = self.axes.convert_xunits(x)
+            y = self.axes.convert_yunits(y)
             x, y = transform.transform((x, y))
 
         idx_level_min, idx_vtx_min, proj = self._find_nearest_contour(
@@ -460,8 +478,8 @@ class ContourLabeler:
         label_width = self._get_nth_label_width(level)
         rotation, path = self._split_path_and_get_label_rotation(
             path, idx_vtx_min, proj, label_width, inline_spacing)
-        self.add_label(*proj, rotation, self.labelLevelList[idx_level_min],
-                       self.labelCValueList[idx_level_min])
+        self.add_label(*proj, rotation, self.labelLevelList[level],
+                       self.labelCValueList[level])
 
         if inline:
             self._paths[idx_level_min] = path
@@ -502,7 +520,14 @@ class ContourLabeler:
     def remove(self):
         super().remove()
         for text in self.labelTexts:
-            text.remove()
+            try:
+                text.remove()
+            except ValueError:
+                _api.warn_external(
+                    "Some labels were manually removed from the ContourSet. "
+                    "To remove labels cleanly, remove the entire ContourSet "
+                    "and recreate it.")
+        self.labelTexts.clear()
 
 
 def _find_closest_point_on_path(xys, p):
@@ -602,7 +627,7 @@ class ContourSet(ContourLabeler, mcoll.Collection):
                  hatches=(None,), alpha=None, origin=None, extent=None,
                  cmap=None, colors=None, norm=None, vmin=None, vmax=None,
                  colorizer=None, extend='neither', antialiased=None, nchunk=0,
-                 locator=None, transform=None, negative_linestyles=None, clip_path=None,
+                 locator=None, transform=None, negative_linestyles=None,
                  **kwargs):
         """
         Draw contour lines or filled regions, depending on
@@ -656,7 +681,6 @@ class ContourSet(ContourLabeler, mcoll.Collection):
         super().__init__(
             antialiaseds=antialiased,
             alpha=alpha,
-            clip_path=clip_path,
             transform=transform,
             colorizer=colorizer,
         )
@@ -671,6 +695,9 @@ class ContourSet(ContourLabeler, mcoll.Collection):
 
         self.nchunk = nchunk
         self.locator = locator
+
+        if "color" in kwargs:
+            raise _api.kwarg_error("ContourSet.__init__", "color")
 
         if colorizer:
             self._set_colorizer_check_keywords(colorizer, cmap=cmap,
@@ -733,13 +760,12 @@ class ContourSet(ContourLabeler, mcoll.Collection):
                     i0 = 1
 
             cmap = mcolors.ListedColormap(
-                cbook._resize_sequence(color_sequence[i0:], ncolors))
-
-            if use_set_under_over:
-                if self._extend_min:
-                    cmap.set_under(color_sequence[0])
-                if self._extend_max:
-                    cmap.set_over(color_sequence[-1])
+                cbook._resize_sequence(color_sequence[i0:], ncolors),
+                under=(color_sequence[0]
+                       if use_set_under_over and self._extend_min else None),
+                over=(color_sequence[-1]
+                      if use_set_under_over and self._extend_max else None),
+            )
 
         # label lists must be initialized here
         self.labelTexts = []
@@ -764,23 +790,18 @@ class ContourSet(ContourLabeler, mcoll.Collection):
                 _api.warn_external('linewidths is ignored by contourf')
             # Lower and upper contour levels.
             lowers, uppers = self._get_lowers_and_uppers()
-            self.set(
-                edgecolor="none",
-                # Default zorder taken from Collection
-                zorder=kwargs.pop("zorder", 1),
-                rasterized=kwargs.pop("rasterized", False),
-            )
-
+            self.set(edgecolor="none")
         else:
             self.set(
                 facecolor="none",
                 linewidths=self._process_linewidths(linewidths),
                 linestyle=self._process_linestyles(linestyles),
+                label="_nolegend_",
                 # Default zorder taken from LineCollection, which is higher
                 # than for filled contours so that lines are displayed on top.
-                zorder=kwargs.pop("zorder", 2),
-                label="_nolegend_",
+                zorder=2,
             )
+        self.set(**kwargs)  # Let user-set values override defaults.
 
         self.axes.add_collection(self, autolim=False)
         self.sticky_edges.x[:] = [self._mins[0], self._maxs[0]]
@@ -789,12 +810,6 @@ class ContourSet(ContourLabeler, mcoll.Collection):
         self.axes.autoscale_view(tight=True)
 
         self.changed()  # set the colors
-
-        if kwargs:
-            _api.warn_external(
-                'The following kwargs were not used by contour: ' +
-                ", ".join(map(repr, kwargs))
-            )
 
     allsegs = property(lambda self: [
         [subp.vertices for subp in p._iter_connected_components()]
@@ -1278,7 +1293,8 @@ class ContourSet(ContourLabeler, mcoll.Collection):
         if edgecolors.size == 0:
             edgecolors = ("none",)
         for idx in range(n_paths):
-            with cbook._setattr_cm(self, _paths=[paths[idx]]), self._cm_set(
+            with self._cm_set(
+                paths=[paths[idx]],
                 hatch=self.hatches[idx % len(self.hatches)],
                 array=[self.get_array()[idx]],
                 linewidths=[self.get_linewidths()[idx % len(self.get_linewidths())]],
@@ -1342,7 +1358,7 @@ class QuadContourSet(ContourSet):
             # if the transform is not trans data, and some part of it
             # contains transData, transform the xs and ys to data coordinates
             if (t != self.axes.transData and
-                    any(t.contains_branch_seperately(self.axes.transData))):
+                    any(t.contains_branch_separately(self.axes.transData))):
                 trans_to_data = t - self.axes.transData
                 pts = np.vstack([x.flat, y.flat]).T
                 transformed_pts = trans_to_data.transform(pts)
@@ -1495,12 +1511,21 @@ Z : (M, N) array-like
 levels : int or array-like, optional
     Determines the number and positions of the contour lines / regions.
 
-    If an int *n*, use `~matplotlib.ticker.MaxNLocator`, which tries
-    to automatically choose no more than *n+1* "nice" contour levels
-    between minimum and maximum numeric values of *Z*.
+    If an int *n*, use `~matplotlib.ticker.MaxNLocator`, which tries to
+    automatically choose no more than *n+2* "nice" contour level boundaries
+    between the minimum and maximum numeric values of *Z*. These boundaries
+    define where lines are drawn (for `contour`) or where filled regions
+    are separated (for `contourf`).
+
+    If not given, a reasonable default is chosen; for linear scales,
+    *n*=7 is the default.
 
     If array-like, draw contour lines at the specified levels.
     The values must be in increasing order.
+
+    If not specified, a reasonable default is automatically chosen. For
+    linear scales, this corresponds to *levels=7*. For logarithmic
+    scales, `~matplotlib.ticker.LogLocator` is used instead.
 
 Returns
 -------

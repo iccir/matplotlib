@@ -2,9 +2,10 @@
 [![Conda](https://img.shields.io/conda/vn/conda-forge/matplotlib)](https://anaconda.org/conda-forge/matplotlib)
 [![Downloads](https://img.shields.io/pypi/dm/matplotlib)](https://pypi.org/project/matplotlib)
 [![NUMFocus](https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A)](https://numfocus.org)
+[![LFX Health Score](https://insights.linuxfoundation.org/api/badge/health-score?project=matplotlib)](https://insights.linuxfoundation.org/project/matplotlib)
 
 [![Discourse help forum](https://img.shields.io/badge/help_forum-discourse-blue.svg)](https://discourse.matplotlib.org)
-[![Gitter](https://badges.gitter.im/matplotlib/matplotlib.svg)](https://gitter.im/matplotlib/matplotlib)
+[![Discourse chat](https://img.shields.io/badge/chat-discourse-mediumaquamarine)](https://discourse.matplotlib.org/chat/c/matplotlib/2)
 [![GitHub issues](https://img.shields.io/badge/issue_tracking-github-blue.svg)](https://github.com/matplotlib/matplotlib/issues)
 [![Contributing](https://img.shields.io/badge/PR-Welcome-%23FF8300.svg?)](https://matplotlib.org/stable/devel/index.html)
 
@@ -14,14 +15,14 @@
 [![Codecov status](https://codecov.io/github/matplotlib/matplotlib/badge.svg?branch=main&service=github)](https://app.codecov.io/gh/matplotlib/matplotlib)
 [![EffVer Versioning](https://img.shields.io/badge/version_scheme-EffVer-0097a7)](https://jacobtomlinson.dev/effver)
 
-![Matplotlib logotype](https://matplotlib.org/_static/logo2.svg)
+![Matplotlib logotype](https://matplotlib.org/stable/_static/logo2.svg)
 
 Matplotlib is a comprehensive library for creating static, animated, and
 interactive visualizations in Python.
 
 Check out our [home page](https://matplotlib.org/) for more information.
 
-![image](https://matplotlib.org/_static/readme_preview.png)
+![image](https://matplotlib.org/stable/_static/readme_preview.png)
 
 Matplotlib produces publication-quality figures in a variety of hardcopy
 formats and interactive environments across platforms. Matplotlib can be
@@ -60,9 +61,9 @@ Our active mailing lists (which are mirrored on Discourse) are:
 -   [Development](https://mail.python.org/mailman/listinfo/matplotlib-devel)
     mailing list: <matplotlib-devel@python.org>
 
-[Gitter](https://gitter.im/matplotlib/matplotlib) is for coordinating
-development and asking questions directly related to contributing to
-matplotlib.
+[Discourse Chat](https://discourse.matplotlib.org/chat/c/matplotlib/2) is for
+coordinating development and asking questions directly related to contributing
+to matplotlib.
 
 ## Citing Matplotlib
 

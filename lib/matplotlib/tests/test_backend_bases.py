@@ -610,3 +610,9 @@ def test_timer_properties():
     # a repeating timer, so make sure our interval is set to a minimum of 1ms.
     timer.interval = 0.1
     assert timer.interval == 1
+
+
+def test_get_width_height_floating_point_precision():
+    fig = plt.figure(figsize=(1, 2.03), dpi=100)
+    assert fig.bbox.height < 203  # due to floating-point precision
+    assert fig.canvas.get_width_height() == (100, 203)

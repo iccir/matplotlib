@@ -164,18 +164,28 @@ class GridFinder:
         method should be considered as a temporary workaround which will be removed in
         the future at the same time as axisartist-specific formatters.
         """
-        fmt = _api.check_getitem(
+        fmt = _api.getitem_checked(
             {1: self.tick_formatter1, 2: self.tick_formatter2}, idx=idx)
         return (fmt.format_ticks(levels) if isinstance(fmt, mticker.Formatter)
                 else fmt(direction, factor, levels))
 
-    def get_grid_info(self, x1, y1, x2, y2):
+    def get_grid_info(self, *args, **kwargs):
         """
-        lon_values, lat_values : list of grid values. if integer is given,
-                           rough number of grids in each direction.
+        Compute positioning information for grid lines and ticks, given the
+        axes' data *bbox*.
         """
+        params = _api.select_matching_signature(
+            [lambda x1, y1, x2, y2: locals(), lambda bbox: locals()], *args, **kwargs)
+        if "x1" in params:
+            _api.warn_deprecated("3.11", message=(
+                "Passing extents as separate arguments to get_grid_info is deprecated "
+                "since %(since)s and support will be removed %(removal)s; pass a "
+                "single bbox instead."))
+            bbox = Bbox.from_extents(
+                params["x1"], params["y1"], params["x2"], params["y2"])
+        else:
+            bbox = params["bbox"]
 
-        bbox = Bbox.from_extents(x1, y1, x2, y2)
         tbbox = self.extreme_finder._find_transformed_bbox(
             self.get_transform().inverted(), bbox)
 

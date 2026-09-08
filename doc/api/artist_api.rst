@@ -87,6 +87,8 @@ Drawing
 
    Artist.set_alpha
    Artist.get_alpha
+   Artist.set_blend_mode
+   Artist.get_blend_mode
    Artist.set_snap
    Artist.get_snap
    Artist.set_visible
@@ -122,6 +124,7 @@ Figure and Axes
 
    Artist.set_figure
    Artist.get_figure
+   Artist.figure
 
 Children
 --------
@@ -199,4 +202,15 @@ Functions
    getp
    setp
    kwdoc
+
+Helper classes
+==============
+
+.. autosummary::
+   :template: autosummary.rst
+   :toctree: _as_gen
+   :nosignatures:
+
    ArtistInspector
+   ArtistList
+   BlendMode

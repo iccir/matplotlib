@@ -21,22 +21,29 @@ Still TODO:
 .. _Anti-Grain Geometry: http://agg.sourceforge.net/antigrain.com
 """
 
+import logging
+from collections import namedtuple
 from contextlib import nullcontext
-from math import radians, cos, sin
+import math
 
 import numpy as np
 from PIL import features
 
 import matplotlib as mpl
 from matplotlib import _api, cbook
+from matplotlib.artist import BlendMode
 from matplotlib.backend_bases import (
-    _Backend, FigureCanvasBase, FigureManagerBase, RendererBase)
+    _Backend, FigureCanvasBase, FigureManagerBase, GraphicsContextBase, RendererBase)
+from matplotlib.dviread import Dvi
 from matplotlib.font_manager import fontManager as _fontManager, get_font
-from matplotlib.ft2font import LoadFlags
+from matplotlib.ft2font import LoadFlags, RenderMode
 from matplotlib.mathtext import MathTextParser
 from matplotlib.path import Path
 from matplotlib.transforms import Bbox, BboxBase
 from matplotlib.backends._backend_agg import RendererAgg as _RendererAgg
+
+
+_log = logging.getLogger(__name__)
 
 
 def get_hinting_flag():
@@ -55,6 +62,12 @@ def get_hinting_flag():
     return mapping[mpl.rcParams['text.hinting']]
 
 
+# Store group parameters as well as variables to restore after closing the group
+_GroupState = namedtuple(
+    '_GroupState', ['group_type', 'blend_mode', 'alpha', 'old_renderer', 'old_override']
+)
+
+
 class RendererAgg(RendererBase):
     """
     The renderer handles all the drawing primitives using a graphics
@@ -68,10 +81,12 @@ class RendererAgg(RendererBase):
         self.width = width
         self.height = height
         self._renderer = _RendererAgg(int(width), int(height), dpi)
-        self._filter_renderers = []
+        self._group_states = []
+
+        self._override_blend_mode_to_knockout = False
 
         self._update_methods()
-        self.mathtext_parser = MathTextParser('agg')
+        self.mathtext_parser = MathTextParser('path')
 
         self.bbox = Bbox.from_bounds(0, 0, self.width, self.height)
 
@@ -84,12 +99,14 @@ class RendererAgg(RendererBase):
         self.__init__(state['width'], state['height'], state['dpi'])
 
     def _update_methods(self):
-        self.draw_gouraud_triangles = self._renderer.draw_gouraud_triangles
         self.draw_image = self._renderer.draw_image
         self.draw_markers = self._renderer.draw_markers
         self.draw_path_collection = self._renderer.draw_path_collection
         self.draw_quad_mesh = self._renderer.draw_quad_mesh
         self.copy_from_bbox = self._renderer.copy_from_bbox
+
+    def new_gc(self):
+        return GraphicsContextAgg(self)
 
     def draw_path(self, gc, path, transform, rgbFace=None):
         # docstring inherited
@@ -171,38 +188,81 @@ class RendererAgg(RendererBase):
 
                 raise OverflowError(msg) from None
 
+    def _draw_text_glyphs_and_boxes(self, gc, x, y, angle, glyphs, boxes):
+        # y is downwards.
+        cos = math.cos(math.radians(angle))
+        sin = math.sin(math.radians(angle))
+        load_flags = get_hinting_flag()
+        for font, size, glyph_index, slant, extend, dx, dy in glyphs:  # dy is upwards.
+            font.set_size(size, self.dpi)
+            font._set_transform(
+                (0x10000 * np.array([[cos, -sin], [sin, cos]])
+                 @ [[extend, extend * slant], [0, 1]]).round().astype(int),
+                [round(0x40 * (x + dx * cos - dy * sin)),
+                 # FreeType's y is upwards.
+                 round(0x40 * (self.height - y + dx * sin + dy * cos))]
+            )
+            bitmap = font._render_glyph(
+                glyph_index, load_flags,
+                RenderMode.NORMAL if gc.get_antialiased() else RenderMode.MONO)
+            buffer = bitmap.buffer
+            if not gc.get_antialiased():
+                buffer *= 0xff
+            # draw_text_image's y is downwards & the bitmap bottom side.
+            self._renderer.draw_text_image(
+                buffer,
+                bitmap.left, int(self.height) - bitmap.top + buffer.shape[0],
+                0, gc)
+
+        rgba = gc.get_rgb()
+        if len(rgba) == 3 or gc.get_forced_alpha():
+            rgba = rgba[:3] + (gc.get_alpha(),)
+        gc1 = self.new_gc()
+        gc1.set_linewidth(0)
+        gc1.set_snap(gc.get_snap())
+        for dx, dy, w, h in boxes:  # dy is upwards.
+            if gc1.get_snap() in [None, True]:
+                # Prevent thin bars from disappearing by growing symmetrically.
+                if w < 1:
+                    dx -= (1 - w) / 2
+                    w = 1
+                if h < 1:
+                    dy -= (1 - h) / 2
+                    h = 1
+            path = Path._create_closed(
+                [(dx, dy), (dx + w, dy), (dx + w, dy + h), (dx, dy + h)])
+            self._renderer.draw_path(
+                gc1, path,
+                mpl.transforms.Affine2D()
+                .rotate_deg(angle).translate(x, self.height - y),
+                rgba)
+        gc1.restore()
+
     def draw_mathtext(self, gc, x, y, s, prop, angle):
         """Draw mathtext using :mod:`matplotlib.mathtext`."""
-        ox, oy, width, height, descent, font_image = \
-            self.mathtext_parser.parse(s, self.dpi, prop,
-                                       antialiased=gc.get_antialiased())
-
-        xd = descent * sin(radians(angle))
-        yd = descent * cos(radians(angle))
-        x = round(x + ox + xd)
-        y = round(y - oy + yd)
-        self._renderer.draw_text_image(font_image, x, y + 1, angle, gc)
+        parse = self.mathtext_parser.parse(
+            s, self.dpi, prop, antialiased=gc.get_antialiased())
+        self._draw_text_glyphs_and_boxes(
+            gc, x, y, angle,
+            ((font, size, glyph_index, 0, 1, dx, dy)
+             for font, size, _char, glyph_index, dx, dy in parse.glyphs),
+            parse.rects)
 
     def draw_text(self, gc, x, y, s, prop, angle, ismath=False, mtext=None):
         # docstring inherited
         if ismath:
             return self.draw_mathtext(gc, x, y, s, prop, angle)
         font = self._prepare_font(prop)
-        # We pass '0' for angle here, since it will be rotated (in raster
-        # space) in the following call to draw_text_image).
-        font.set_text(s, 0, flags=get_hinting_flag())
-        font.draw_glyphs_to_bitmap(
-            antialiased=gc.get_antialiased())
-        d = font.get_descent() / 64.0
-        # The descent needs to be adjusted for the angle.
-        xo, yo = font.get_bitmap_offset()
-        xo /= 64.0
-        yo /= 64.0
-        xd = d * sin(radians(angle))
-        yd = d * cos(radians(angle))
-        x = round(x + xo + xd)
-        y = round(y + yo + yd)
-        self._renderer.draw_text_image(font, x, y + 1, angle, gc)
+        items = font._layout(
+            s, flags=get_hinting_flag(),
+            features=mtext.get_fontfeatures() if mtext is not None else None,
+            language=mtext.get_language() if mtext is not None else None)
+        size = prop.get_size_in_points()
+        self._draw_text_glyphs_and_boxes(
+            gc, x, y, angle,
+            ((item.ft_object, size, item.glyph_index, 0, 1, item.x, item.y)
+             for item in items),
+            [])
 
     def get_text_width_height_descent(self, s, prop, ismath):
         # docstring inherited
@@ -212,9 +272,8 @@ class RendererAgg(RendererBase):
             return super().get_text_width_height_descent(s, prop, ismath)
 
         if ismath:
-            ox, oy, width, height, descent, font_image = \
-                self.mathtext_parser.parse(s, self.dpi, prop)
-            return width, height, descent
+            parse = self.mathtext_parser.parse(s, self.dpi, prop)
+            return parse.width, parse.height, parse.depth
 
         font = self._prepare_font(prop)
         font.set_text(s, 0.0, flags=get_hinting_flag())
@@ -228,19 +287,42 @@ class RendererAgg(RendererBase):
     def draw_tex(self, gc, x, y, s, prop, angle, *, mtext=None):
         # docstring inherited
         # todo, handle props, angle, origins
+
         size = prop.get_size_in_points()
 
-        texmanager = self.get_texmanager()
+        if mpl.rcParams["text.latex.engine"] == "latex+dvipng":
+            Z = self.get_texmanager().get_grey(s, size, self.dpi)
+            Z = (Z * 0xff).astype(np.uint8)
+            w, h, d = self.get_text_width_height_descent(s, prop, ismath="TeX")
+            xd = d * math.sin(math.radians(angle))
+            yd = d * math.cos(math.radians(angle))
+            x = round(x + xd)
+            y = round(y + yd)
+            self._renderer.draw_text_image(Z, x, y, angle, gc)
+            return
 
-        Z = texmanager.get_grey(s, size, self.dpi)
-        Z = np.array(Z * 255.0, np.uint8)
+        dvifile = self.get_texmanager().make_dvi(s, size)
+        with Dvi(dvifile, self.dpi) as dvi:
+            page, = dvi
 
-        w, h, d = self.get_text_width_height_descent(s, prop, ismath="TeX")
-        xd = d * sin(radians(angle))
-        yd = d * cos(radians(angle))
-        x = round(x + xd)
-        y = round(y + yd)
-        self._renderer.draw_text_image(Z, x, y, angle, gc)
+        self._draw_text_glyphs_and_boxes(
+            gc, x, y, angle,
+            ((get_font(text.font_path), text.font_size, text.index,
+              text.font_effects.get('slant', 0), text.font_effects.get('extend', 1),
+              text.x, text.y)
+             for text in page.text),
+            ((box.x, box.y, box.width, box.height) for box in page.boxes))
+
+    def draw_gouraud_triangles(self, gc, triangles_array, colors_array, transform):
+        # docstring inherited
+        # The Gouraud triangles are rendered into an isolated buffer using the "plus"
+        # blend mode in order to get the colors of the edges and vertices correct.
+        # Afterwards, the isolated buffer is blended into the primary buffer using the
+        # specified blend mode.
+        self.open_blend_group(gc.get_blend_mode())
+        self._renderer._draw_gouraud_triangles(gc, triangles_array, colors_array,
+                                               transform)
+        self.close_blend_group()
 
     def get_canvas_width_height(self):
         # docstring inherited
@@ -320,12 +402,14 @@ class RendererAgg(RendererBase):
         """
         Start filtering. It simply creates a new canvas (the old one is saved).
         """
-        self._filter_renderers.append(self._renderer)
+        self._group_states.append(
+            _GroupState("filter", None, None, self._renderer, None)
+        )
         self._renderer = _RendererAgg(int(self.width), int(self.height),
                                       self.dpi)
         self._update_methods()
 
-    def stop_filter(self, post_processing):
+    def stop_filter(self, post_processing, *, blend_mode="normal"):
         """
         Save the current canvas as an image and apply post processing.
 
@@ -341,23 +425,86 @@ class RendererAgg(RendererBase):
              return new_image, offset_x, offset_y
 
         The saved renderer is restored and the returned image from
-        post_processing is plotted (using draw_image) on it.
+        post_processing is plotted (using draw_image) on it, using the blend
+        mode specified by ``blend_mode``.
         """
         orig_img = np.asarray(self.buffer_rgba())
         slice_y, slice_x = cbook._get_nonzero_slices(orig_img[..., 3])
         cropped_img = orig_img[slice_y, slice_x]
 
-        self._renderer = self._filter_renderers.pop()
+        group_state = self._group_states.pop()
+        self._renderer = group_state.old_renderer
+        if group_state.group_type != "filter":
+            raise RuntimeError("Cannot stop filtering because it includes a blend "
+                               "group that has not been closed.")
         self._update_methods()
 
         if cropped_img.size:
             img, ox, oy = post_processing(cropped_img / 255, self.dpi)
             gc = self.new_gc()
+            gc.set_blend_mode(blend_mode)
             if img.dtype.kind == 'f':
                 img = np.asarray(img * 255., np.uint8)
             self._renderer.draw_image(
                 gc, slice_x.start + ox, int(self.height) - slice_y.stop + oy,
                 img[::-1])
+
+    def open_blend_group(self, blend_mode, *, alpha=1, knockout=False):
+        # docstring inherited
+        if blend_mode is not None:
+            _api.check_in_list(BlendMode, blend_mode=blend_mode)
+        self._group_states.append(
+            _GroupState("blend", blend_mode, alpha, self._renderer,
+                        self._override_blend_mode_to_knockout)
+        )
+
+        if knockout and blend_mode is None:
+            _log.warning("A non-isolated blend group cannot also be a knockout blend "
+                         "group in the Agg backend.  Falling back to a non-knockout "
+                         "blend group.")
+            knockout = False
+
+        if blend_mode is not None:
+            self._renderer = _RendererAgg(int(self.width), int(self.height), self.dpi)
+            self._update_methods()
+            self._override_blend_mode_to_knockout = knockout
+
+    def close_blend_group(self):
+        # docstring inherited
+        group_state = self._group_states.pop()
+        self._override_blend_mode_to_knockout = group_state.old_override
+        if group_state.group_type != "blend":
+            raise RuntimeError("Cannot close the blend group because it includes a "
+                               "filter that has been started but not yet stopped.")
+
+        if group_state.blend_mode is not None:
+            orig_img = np.asarray(self.buffer_rgba())
+            slice_y, slice_x = cbook._get_nonzero_slices(orig_img[..., 3])
+            cropped_img = orig_img[slice_y, slice_x]
+
+            self._renderer = group_state.old_renderer
+            self._update_methods()
+
+            if cropped_img.size:
+                gc = self.new_gc()
+                gc.set_blend_mode(group_state.blend_mode)
+                gc.set_alpha(group_state.alpha)
+                self._renderer.draw_image(
+                    gc, slice_x.start, int(self.height) - slice_y.stop,
+                    cropped_img[::-1]
+                )
+
+
+class GraphicsContextAgg(GraphicsContextBase):
+    def __init__(self, renderer):
+        super().__init__()
+        self.renderer = renderer
+
+    def set_blend_mode(self, blend_mode):
+        if self.renderer._override_blend_mode_to_knockout:
+            super().set_blend_mode("knockout")
+        else:
+            super().set_blend_mode(blend_mode)
 
 
 class FigureCanvasAgg(FigureCanvasBase):
@@ -386,7 +533,7 @@ class FigureCanvasAgg(FigureCanvasBase):
             super().draw()
 
     def get_renderer(self):
-        w, h = self.figure.bbox.size
+        w, h = self.get_width_height(physical=True)
         key = w, h, self.figure.dpi
         reuse_renderer = (self._lastKey == key)
         if not reuse_renderer:

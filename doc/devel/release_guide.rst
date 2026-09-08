@@ -45,7 +45,7 @@ versioning scheme: *macro.meso.micro*.
 
 .. _release_feature_freeze:
 
-Making the release branch
+Create the release branch
 =========================
 
 .. note::
@@ -83,7 +83,11 @@ Micro versions should instead read::
 Check all active milestones for consistency. Older milestones should also backport
 to higher meso versions (e.g. ``v3.6.3`` and ``v3.6-doc`` should backport to both
 ``v3.6.x`` and ``v3.7.x`` once the ``v3.7.x`` branch exists and while PR backports are
-still targeting ``v3.6.x``)
+still targeting ``v3.6.x``).
+
+Close milestones for versions that are unlikely to be released, e.g. micro versions of
+older meso releases. Remilestone issues/PRs that are now untagged to the appropriate
+future release milestone.
 
 Create the milestone for the next-next meso release (i.e. ``v3.9.0``, as ``v3.8.0``
 should already exist). While most active items should go in the next meso release,
@@ -125,22 +129,22 @@ prepare this list:
 
 1. Archive the existing GitHub statistics page.
 
-   a. Copy the current :file:`doc/users/github_stats.rst` to
-      :file:`doc/users/prev_whats_new/github_stats_{X}.{Y}.{Z}.rst`.
+   a. Copy the current :file:`doc/release/github_stats.rst` to
+      :file:`doc/release/prev_whats_new/github_stats_{X}.{Y}.{Z}.rst`.
    b. Change the link target at the top of the file.
    c. Remove the "Previous GitHub Stats" section at the end.
 
    For example, when updating from v3.7.0 to v3.7.1::
 
-      cp doc/users/github_stats.rst doc/users/prev_whats_new/github_stats_3.7.0.rst
-      $EDITOR doc/users/prev_whats_new/github_stats_3.7.0.rst
+      cp doc/release/github_stats.rst doc/release/prev_whats_new/github_stats_3.7.0.rst
+      $EDITOR doc/release/prev_whats_new/github_stats_3.7.0.rst
       # Change contents as noted above.
-      git add doc/users/prev_whats_new/github_stats_3.7.0.rst
+      git add doc/release/prev_whats_new/github_stats_3.7.0.rst
 
 2. Re-generate the updated stats::
 
        python tools/github_stats.py --since-tag v3.7.0 --milestone=v3.7.1 \
-           --project 'matplotlib/matplotlib' --links > doc/users/github_stats.rst
+           --project 'matplotlib/matplotlib' --links > doc/release/github_stats.rst
 
 3. Review and commit changes. Some issue/PR titles may not be valid reST (the most
    common issue is ``*`` which is interpreted as unclosed markup). Also confirm that
@@ -194,8 +198,8 @@ What's new
 *Only needed for macro and meso releases. Bugfix releases should not have new
 features.*
 
-Merge the contents of all the files in :file:`doc/users/next_whats_new/` into a single
-file :file:`doc/users/prev_whats_new/whats_new_{X}.{Y}.0.rst` and delete the individual
+Merge the contents of all the files in :file:`doc/release/next_whats_new/` into a single
+file :file:`doc/release/prev_whats_new/whats_new_{X}.{Y}.0.rst` and delete the individual
 files.
 
 API changes
@@ -211,7 +215,7 @@ individual files.
 Release notes TOC
 ^^^^^^^^^^^^^^^^^
 
-Update :file:`doc/users/release_notes.rst`:
+Update :file:`doc/release/release_notes.rst`:
 
 - For macro and meso releases add a new section
 
@@ -294,9 +298,15 @@ it is important to move all branches away from the commit with the tag [#]_::
 
   git commit --allow-empty
 
+Push the branch to GitHub. This is done prior to pushing the tag as a last step in ensuring
+that the branch was fully up to date. If it fails, re-fetch and recreate commits and
+tag over an up to date branch::
+
+  git push DANGER v3.7.x
+
 Finally, push the tag to GitHub::
 
-  git push DANGER v3.7.x v3.7.0
+  git push DANGER v3.7.0
 
 Congratulations, the scariest part is done!
 This assumes the release branch has already been made.
@@ -369,16 +379,27 @@ to the VER-doc branch and push to GitHub. ::
 
 .. _release_bld_bin:
 
-Building binaries
-=================
+Build binaries
+==============
 
 We distribute macOS, Windows, and many Linux wheels as well as a source tarball via
-PyPI. Most builders should trigger automatically once the tag is pushed to GitHub:
+PyPI.
 
 * Windows, macOS and manylinux wheels are built on GitHub Actions. Builds are triggered
-  by the GitHub Action defined in :file:`.github/workflows/cibuildwheel.yml`, and wheels
+  by the GitHub Action defined in a separate
+  `release repository <https://github.com/matplotlib/matplotlib-release>`__, and wheels
   will be available as artifacts of the build. Both a source tarball and the wheels will
   be automatically uploaded to PyPI once all of them have been built.
+* To trigger the build for the ``matplotlib-release`` repository:
+
+  * If not already created, create a release branch for the meso version (e.g. ``v3.10.x``)
+  * Edit the ``SOURCE_REF_TO_BUILD`` environment variable at the top of
+    `wheels.yml <https://github.com/matplotlib/matplotlib-release/blob/main/.github/workflows/wheels.yml>`__
+    on the release branch to point to the release tag.
+  * Run the workflow from the release branch, with "pypi" selected for the pypi environment
+    using the `Workflow Dispatch trigger <https://github.com/matplotlib/matplotlib-release/actions/workflows/wheels.yml>`__
+  * This will run cibuildwheel and upload to PyPI using the Trusted Publishers GitHub Action.
+
 * The auto-tick bot should open a pull request into the `conda-forge feedstock
   <https://github.com/conda-forge/matplotlib-feedstock>`__. Review and merge (if you
   have the power to).
@@ -391,8 +412,8 @@ PyPI. Most builders should trigger automatically once the tag is pushed to GitHu
 
 .. _release_upload_bin:
 
-Manually uploading to PyPI
-==========================
+Manual upload to PyPI
+=====================
 
 .. note::
 
@@ -429,7 +450,7 @@ To build the documentation you must have the tagged version installed, but
 build the docs from the ``ver-doc`` branch.  An easy way to arrange this is::
 
   pip install matplotlib
-  pip install -r requirements/doc/doc-requirements.txt
+  pip install --group doc
   git checkout v3.7.0-doc
   git clean -xfd
   make -Cdoc O="-t release -j$(nproc)" html latexpdf LATEXMKOPTS="-silent -f"
