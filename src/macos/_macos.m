@@ -449,27 +449,24 @@ typedef struct {
 static PyObject *
 FigureManager_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    BEGIN_OBJC_ENTRY
-    if (![NSThread isMainThread]) {
-        PyErr_SetString(
-            PyExc_RuntimeError,
-            "Cannot create a GUI FigureManager outside the main thread "
-            "using the MacOS backend. Use a non-interactive "
-            "backend like 'agg' to make plots on worker threads."
-        );
-        return NULL;
-    }
-
     return (PyObject *)((FigureManager *)type->tp_alloc(type, 0));
-
-    END_OBJC_ENTRY
-    return NULL;
 }
 
 static int
 FigureManager_init(FigureManager *self, PyObject *args, PyObject *kwds)
 {
-    BEGIN_OBJC_ENTRY
+    BEGIN_OBJC_ENTRY_NO_THREAD_CHECK
+
+    if (![NSThread isMainThread]) {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "Cannot create a GUI FigureManager outside the main thread "
+            "using the macOS backend. Use a non-interactive "
+            "backend like 'agg' to make plots on worker threads."
+        );
+        return -1;
+    }
+
     PyObject *figureCanvasPyObject;
     if (!PyArg_ParseTuple(args, "O!", &FigureCanvasType, &figureCanvasPyObject)) {
         return -1;
