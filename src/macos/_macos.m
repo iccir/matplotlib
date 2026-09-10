@@ -30,10 +30,13 @@
    As a convenience, the RETURN_NULL_OR_NONE macro can be used for functions
    that return a PyObject */
 #define BEGIN_OBJC_ENTRY \
-    @autoreleasepool { @try {
+    @autoreleasepool { @try { if (sErrIsMainThread()) {
+
+#define BEGIN_OBJC_ENTRY_NO_THREAD_CHECK \
+    @autoreleasepool { @try { if (1) {
 
 #define END_OBJC_ENTRY \
-    } @catch (NSException *e) { sErrSetException(e); } }
+    } } @catch (NSException *e) { sErrSetException(e); } }
 
 #define RETURN_NULL_OR_NONE \
     if (PyErr_Occurred()) { \
@@ -52,6 +55,20 @@ static NSHashTable<MPLFigureManager *> *sFigureManagerHashTable = nil;
 
 // Set to YES in _init() if initialization was successful
 static BOOL sIsInitialized = NO;
+
+// Set a Python RuntimeError if not the main thread
+static BOOL sErrIsMainThread(void)
+{
+    if (![NSThread isMainThread]) {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "Method can only be called on the main thread."
+        );
+        return NO;
+    }
+
+    return YES;
+}
 
 // Convert an Objective-C exception into a Python RuntimeError
 static void sErrSetException(NSException *exception)
@@ -264,7 +281,7 @@ FigureCanvas_flush_events(FigureCanvas *self)
 static PyObject *
 FigureCanvas_request_display_layer(FigureCanvas *self, PyObject *args)
 {
-    BEGIN_OBJC_ENTRY
+    BEGIN_OBJC_ENTRY_NO_THREAD_CHECK
 
     int needsDraw;
     if (!PyArg_ParseTuple(args, "p", &needsDraw)) { return NULL; }
