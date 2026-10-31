@@ -21,6 +21,17 @@ class TestAffine2D:
     multiple_points = [[0.0, 2.0], [3.0, 3.0], [4.0, 0.0]]
     pivot = single_point
 
+    def _check_single_point(self, trans, expected_point, exact=False):
+        f = assert_array_equal if exact else assert_array_almost_equal
+        # 1D = optimized pathway which stays in Python
+        f(trans.transform(self.single_point), expected_point)
+        # 2D = uses C++ _path module
+        f(trans.transform((self.single_point,)), (expected_point,))
+
+    def _check_multiple_points(self, trans, expected_points, exact=False):
+        f = assert_array_equal if exact else assert_array_almost_equal
+        f(trans.transform(self.multiple_points), expected_points)
+
     def test_init(self):
         Affine2D([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
         Affine2D(np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], int))
@@ -47,23 +58,20 @@ class TestAffine2D:
         r_pi_2 = Affine2D().rotate(np.pi / 2)
         r90 = Affine2D().rotate_deg(90)
         assert_array_equal(r_pi_2.get_matrix(), r90.get_matrix())
-        assert_array_almost_equal(r90.transform(self.single_point), [-1, 1])
-        assert_array_almost_equal(r90.transform(self.multiple_points),
-                                  [[-2, 0], [-3, 3], [0, 4]])
+        self._check_single_point(r90, [-1, 1])
+        self._check_multiple_points(r90, [[-2, 0], [-3, 3], [0, 4]])
 
         r_pi = Affine2D().rotate(np.pi)
         r180 = Affine2D().rotate_deg(180)
         assert_array_equal(r_pi.get_matrix(), r180.get_matrix())
-        assert_array_almost_equal(r180.transform(self.single_point), [-1, -1])
-        assert_array_almost_equal(r180.transform(self.multiple_points),
-                                  [[0, -2], [-3, -3], [-4, 0]])
+        self._check_single_point(r180, [-1, -1])
+        self._check_multiple_points(r180, [[0, -2], [-3, -3], [-4, 0]])
 
         r_pi_3_2 = Affine2D().rotate(3 * np.pi / 2)
         r270 = Affine2D().rotate_deg(270)
         assert_array_equal(r_pi_3_2.get_matrix(), r270.get_matrix())
-        assert_array_almost_equal(r270.transform(self.single_point), [1, -1])
-        assert_array_almost_equal(r270.transform(self.multiple_points),
-                                  [[2, 0], [3, -3], [0, -4]])
+        self._check_single_point(r270, [1, -1])
+        self._check_multiple_points(r270, [[2, 0], [3, -3], [0, -4]])
 
         assert_array_equal((r90 + r90).get_matrix(), r180.get_matrix())
         assert_array_equal((r90 + r180).get_matrix(), r270.get_matrix())
@@ -72,23 +80,20 @@ class TestAffine2D:
         r_pi_2 = Affine2D().rotate_around(*self.pivot, np.pi / 2)
         r90 = Affine2D().rotate_deg_around(*self.pivot, 90)
         assert_array_equal(r_pi_2.get_matrix(), r90.get_matrix())
-        assert_array_almost_equal(r90.transform(self.single_point), [1, 1])
-        assert_array_almost_equal(r90.transform(self.multiple_points),
-                                  [[0, 0], [-1, 3], [2, 4]])
+        self._check_single_point(r90, [1, 1])
+        self._check_multiple_points(r90, [[0, 0], [-1, 3], [2, 4]])
 
         r_pi = Affine2D().rotate_around(*self.pivot, np.pi)
         r180 = Affine2D().rotate_deg_around(*self.pivot, 180)
         assert_array_equal(r_pi.get_matrix(), r180.get_matrix())
-        assert_array_almost_equal(r180.transform(self.single_point), [1, 1])
-        assert_array_almost_equal(r180.transform(self.multiple_points),
-                                  [[2, 0], [-1, -1], [-2, 2]])
+        self._check_single_point(r180, [1, 1])
+        self._check_multiple_points(r180, [[2, 0], [-1, -1], [-2, 2]])
 
         r_pi_3_2 = Affine2D().rotate_around(*self.pivot, 3 * np.pi / 2)
         r270 = Affine2D().rotate_deg_around(*self.pivot, 270)
         assert_array_equal(r_pi_3_2.get_matrix(), r270.get_matrix())
-        assert_array_almost_equal(r270.transform(self.single_point), [1, 1])
-        assert_array_almost_equal(r270.transform(self.multiple_points),
-                                  [[2, 2], [3, -1], [0, -2]])
+        self._check_single_point(r270, [1, 1])
+        self._check_multiple_points(r270, [[2, 2], [3, -1], [0, -2]])
 
         assert_array_almost_equal((r90 + r90).get_matrix(), r180.get_matrix())
         assert_array_almost_equal((r90 + r180).get_matrix(), r270.get_matrix())
@@ -98,9 +103,8 @@ class TestAffine2D:
         sy = Affine2D().scale(1, -2)
         trans = Affine2D().scale(3, -2)
         assert_array_equal((sx + sy).get_matrix(), trans.get_matrix())
-        assert_array_equal(trans.transform(self.single_point), [3, -2])
-        assert_array_equal(trans.transform(self.multiple_points),
-                           [[0, -4], [9, -6], [12, 0]])
+        self._check_single_point(trans, [3, -2], exact=True)
+        self._check_multiple_points(trans, [[0, -4], [9, -6], [12, 0]], exact=True)
 
     def test_skew(self):
         trans_rad = Affine2D().skew(np.pi / 8, np.pi / 12)
@@ -108,116 +112,102 @@ class TestAffine2D:
         assert_array_equal(trans_rad.get_matrix(), trans_deg.get_matrix())
         # Using ~atan(0.5), ~atan(0.25) produces roundish numbers on output.
         trans = Affine2D().skew_deg(26.5650512, 14.0362435)
-        assert_array_almost_equal(trans.transform(self.single_point), [1.5, 1.25])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[1, 2], [4.5, 3.75], [4, 1]])
+        self._check_single_point(trans, [1.5, 1.25])
+        self._check_multiple_points(trans, [[1, 2], [4.5, 3.75], [4, 1]])
 
     def test_translate(self):
         tx = Affine2D().translate(23, 0)
         ty = Affine2D().translate(0, 42)
         trans = Affine2D().translate(23, 42)
         assert_array_equal((tx + ty).get_matrix(), trans.get_matrix())
-        assert_array_equal(trans.transform(self.single_point), [24, 43])
-        assert_array_equal(trans.transform(self.multiple_points),
-                           [[23, 44], [26, 45], [27, 42]])
+        self._check_single_point(trans, [24, 43], exact=True)
+        self._check_multiple_points(trans, [[23, 44], [26, 45], [27, 42]], exact=True)
 
     def test_rotate_plus_other(self):
         trans = Affine2D().rotate_deg(90).rotate_deg_around(*self.pivot, 180)
         trans_added = (Affine2D().rotate_deg(90) +
                        Affine2D().rotate_deg_around(*self.pivot, 180))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [3, 1])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[4, 2], [5, -1], [2, -2]])
+        self._check_single_point(trans, [3, 1])
+        self._check_multiple_points(trans, [[4, 2], [5, -1], [2, -2]])
 
         trans = Affine2D().rotate_deg(90).scale(3, -2)
         trans_added = Affine2D().rotate_deg(90) + Affine2D().scale(3, -2)
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [-3, -2])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[-6, -0], [-9, -6], [0, -8]])
+        self._check_single_point(trans, [-3, -2])
+        self._check_multiple_points(trans, [[-6, -0], [-9, -6], [0, -8]])
 
         trans = (Affine2D().rotate_deg(90)
                  .skew_deg(26.5650512, 14.0362435))  # ~atan(0.5), ~atan(0.25)
         trans_added = (Affine2D().rotate_deg(90) +
                        Affine2D().skew_deg(26.5650512, 14.0362435))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [-0.5, 0.75])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[-2, -0.5], [-1.5, 2.25], [2, 4]])
+        self._check_single_point(trans, [-0.5, 0.75])
+        self._check_multiple_points(trans, [[-2, -0.5], [-1.5, 2.25], [2, 4]])
 
         trans = Affine2D().rotate_deg(90).translate(23, 42)
         trans_added = Affine2D().rotate_deg(90) + Affine2D().translate(23, 42)
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [22, 43])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[21, 42], [20, 45], [23, 46]])
+        self._check_single_point(trans, [22, 43])
+        self._check_multiple_points(trans, [[21, 42], [20, 45], [23, 46]])
 
     def test_rotate_around_plus_other(self):
         trans = Affine2D().rotate_deg_around(*self.pivot, 90).rotate_deg(180)
         trans_added = (Affine2D().rotate_deg_around(*self.pivot, 90) +
                        Affine2D().rotate_deg(180))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [-1, -1])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[0, 0], [1, -3], [-2, -4]])
+        self._check_single_point(trans, [-1, -1])
+        self._check_multiple_points(trans, [[0, 0], [1, -3], [-2, -4]])
 
         trans = Affine2D().rotate_deg_around(*self.pivot, 90).scale(3, -2)
         trans_added = (Affine2D().rotate_deg_around(*self.pivot, 90) +
                        Affine2D().scale(3, -2))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [3, -2])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[0, 0], [-3, -6], [6, -8]])
+        self._check_single_point(trans, [3, -2])
+        self._check_multiple_points(trans, [[0, 0], [-3, -6], [6, -8]])
 
         trans = (Affine2D().rotate_deg_around(*self.pivot, 90)
                  .skew_deg(26.5650512, 14.0362435))  # ~atan(0.5), ~atan(0.25)
         trans_added = (Affine2D().rotate_deg_around(*self.pivot, 90) +
                        Affine2D().skew_deg(26.5650512, 14.0362435))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [1.5, 1.25])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[0, 0], [0.5, 2.75], [4, 4.5]])
+        self._check_single_point(trans, [1.5, 1.25])
+        self._check_multiple_points(trans, [[0, 0], [0.5, 2.75], [4, 4.5]])
 
         trans = Affine2D().rotate_deg_around(*self.pivot, 90).translate(23, 42)
         trans_added = (Affine2D().rotate_deg_around(*self.pivot, 90) +
                        Affine2D().translate(23, 42))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [24, 43])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[23, 42], [22, 45], [25, 46]])
+        self._check_single_point(trans, [24, 43])
+        self._check_multiple_points(trans, [[23, 42], [22, 45], [25, 46]])
 
     def test_scale_plus_other(self):
         trans = Affine2D().scale(3, -2).rotate_deg(90)
         trans_added = Affine2D().scale(3, -2) + Affine2D().rotate_deg(90)
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_equal(trans.transform(self.single_point), [2, 3])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[4, 0], [6, 9], [0, 12]])
+        self._check_single_point(trans, [2, 3], exact=True)
+        self._check_multiple_points(trans, [[4, 0], [6, 9], [0, 12]])
 
         trans = Affine2D().scale(3, -2).rotate_deg_around(*self.pivot, 90)
         trans_added = (Affine2D().scale(3, -2) +
                        Affine2D().rotate_deg_around(*self.pivot, 90))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_equal(trans.transform(self.single_point), [4, 3])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[6, 0], [8, 9], [2, 12]])
+        self._check_single_point(trans, [4, 3], exact=True)
+        self._check_multiple_points(trans, [[6, 0], [8, 9], [2, 12]])
 
         trans = (Affine2D().scale(3, -2)
                  .skew_deg(26.5650512, 14.0362435))  # ~atan(0.5), ~atan(0.25)
         trans_added = (Affine2D().scale(3, -2) +
                        Affine2D().skew_deg(26.5650512, 14.0362435))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [2, -1.25])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[-2, -4], [6, -3.75], [12, 3]])
+        self._check_single_point(trans, [2, -1.25])
+        self._check_multiple_points(trans, [[-2, -4], [6, -3.75], [12, 3]])
 
         trans = Affine2D().scale(3, -2).translate(23, 42)
         trans_added = Affine2D().scale(3, -2) + Affine2D().translate(23, 42)
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_equal(trans.transform(self.single_point), [26, 40])
-        assert_array_equal(trans.transform(self.multiple_points),
-                           [[23, 38], [32, 36], [35, 42]])
+        self._check_single_point(trans, [26, 40], exact=True)
+        self._check_multiple_points(trans, [[23, 38], [32, 36], [35, 42]], exact=True)
 
     def test_skew_plus_other(self):
         # Using ~atan(0.5), ~atan(0.25) produces roundish numbers on output.
@@ -225,66 +215,58 @@ class TestAffine2D:
         trans_added = (Affine2D().skew_deg(26.5650512, 14.0362435) +
                        Affine2D().rotate_deg(90))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [-1.25, 1.5])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[-2, 1], [-3.75, 4.5], [-1, 4]])
+        self._check_single_point(trans, [-1.25, 1.5])
+        self._check_multiple_points(trans, [[-2, 1], [-3.75, 4.5], [-1, 4]])
 
         trans = (Affine2D().skew_deg(26.5650512, 14.0362435)
                  .rotate_deg_around(*self.pivot, 90))
         trans_added = (Affine2D().skew_deg(26.5650512, 14.0362435) +
                        Affine2D().rotate_deg_around(*self.pivot, 90))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [0.75, 1.5])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[0, 1], [-1.75, 4.5], [1, 4]])
+        self._check_single_point(trans, [0.75, 1.5])
+        self._check_multiple_points(trans, [[0, 1], [-1.75, 4.5], [1, 4]])
 
         trans = Affine2D().skew_deg(26.5650512, 14.0362435).scale(3, -2)
         trans_added = (Affine2D().skew_deg(26.5650512, 14.0362435) +
                        Affine2D().scale(3, -2))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [4.5, -2.5])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[3, -4], [13.5, -7.5], [12, -2]])
+        self._check_single_point(trans, [4.5, -2.5])
+        self._check_multiple_points(trans, [[3, -4], [13.5, -7.5], [12, -2]])
 
         trans = Affine2D().skew_deg(26.5650512, 14.0362435).translate(23, 42)
         trans_added = (Affine2D().skew_deg(26.5650512, 14.0362435) +
                        Affine2D().translate(23, 42))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [24.5, 43.25])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[24, 44], [27.5, 45.75], [27, 43]])
+        self._check_single_point(trans, [24.5, 43.25])
+        self._check_multiple_points(trans, [[24, 44], [27.5, 45.75], [27, 43]])
 
     def test_translate_plus_other(self):
         trans = Affine2D().translate(23, 42).rotate_deg(90)
         trans_added = Affine2D().translate(23, 42) + Affine2D().rotate_deg(90)
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [-43, 24])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[-44, 23], [-45, 26], [-42, 27]])
+        self._check_single_point(trans, [-43, 24])
+        self._check_multiple_points(trans, [[-44, 23], [-45, 26], [-42, 27]])
 
         trans = Affine2D().translate(23, 42).rotate_deg_around(*self.pivot, 90)
         trans_added = (Affine2D().translate(23, 42) +
                        Affine2D().rotate_deg_around(*self.pivot, 90))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [-41, 24])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[-42, 23], [-43, 26], [-40, 27]])
+        self._check_single_point(trans, [-41, 24])
+        self._check_multiple_points(trans, [[-42, 23], [-43, 26], [-40, 27]])
 
         trans = Affine2D().translate(23, 42).scale(3, -2)
         trans_added = Affine2D().translate(23, 42) + Affine2D().scale(3, -2)
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [72, -86])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[69, -88], [78, -90], [81, -84]])
+        self._check_single_point(trans, [72, -86])
+        self._check_multiple_points(trans, [[69, -88], [78, -90], [81, -84]])
 
         trans = (Affine2D().translate(23, 42)
                  .skew_deg(26.5650512, 14.0362435))  # ~atan(0.5), ~atan(0.25)
         trans_added = (Affine2D().translate(23, 42) +
                        Affine2D().skew_deg(26.5650512, 14.0362435))
         assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
-        assert_array_almost_equal(trans.transform(self.single_point), [45.5, 49])
-        assert_array_almost_equal(trans.transform(self.multiple_points),
-                                  [[45, 49.75], [48.5, 51.5], [48, 48.75]])
+        self._check_single_point(trans, [45.5, 49])
+        self._check_multiple_points(trans, [[45, 49.75], [48.5, 51.5], [48, 48.75]])
 
     def test_invalid_transform(self):
         t = mtransforms.Affine2D()
