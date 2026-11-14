@@ -53,6 +53,8 @@ def main():
             # make later lookups succeed either way.
             graph[formula["name"]] = deps
             graph[formula["full_name"]] = deps
+            for alias in formula["aliases"]:
+                graph[alias] = deps
 
         # The next layer is every dependency seen so far that has not been
         # requested yet. Excluded names are skipped, so their own
